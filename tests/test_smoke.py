@@ -33,11 +33,13 @@ from zabbix_mcp.config import (
 from zabbix_mcp.client import ClientManager, RateLimitError, ReadOnlyError, _RateLimiter
 from zabbix_mcp.server import (
     _BearerTokenVerifier,
+    _build_zabbix_params,
     _normalize_import_rules,
     _register_tools,
     _snake_to_camel,
 )
 from zabbix_mcp.api import ALL_METHODS
+from zabbix_mcp.api.types import MethodDef, ParamDef
 
 
 def _make_config(**server_overrides):
@@ -361,6 +363,53 @@ class TestImportRulesNormalization(unittest.TestCase):
         self.assertNotIn("templateGroups", result["rules"])
         self.assertNotIn("host_groups", result["rules"])
         self.assertNotIn("template_groups", result["rules"])
+
+
+class TestBuildZabbixParams(unittest.TestCase):
+    def test_delete_method_returns_list(self):
+        md = MethodDef("host.delete", "host_delete", "d", read_only=False,
+                        params=[ParamDef("ids", "list[str]", "d", required=True)])
+        result = _build_zabbix_params(md, {"ids": ["10084", "10085"]})
+        self.assertEqual(result, ["10084", "10085"])
+
+    def test_array_param_returns_list(self):
+        md = MethodDef("history.clear", "history_clear", "d", read_only=False,
+                        params=[ParamDef("itemids", "list[str]", "d", required=True)],
+                        array_param="itemids")
+        result = _build_zabbix_params(md, {"itemids": ["101", "102"]})
+        self.assertEqual(result, ["101", "102"])
+
+    def test_array_param_list_type(self):
+        md = MethodDef("history.push", "history_push", "d", read_only=False,
+                        params=[ParamDef("items", "list", "d", required=True)],
+                        array_param="items")
+        data = [{"itemid": "1", "clock": 123, "ns": 0, "value": "42"}]
+        result = _build_zabbix_params(md, {"items": data})
+        self.assertEqual(result, data)
+
+    def test_array_param_takes_priority(self):
+        """array_param should be checked before 'params' dict path."""
+        md = MethodDef("user.unblock", "user_unblock", "d", read_only=False,
+                        params=[ParamDef("userids", "list[str]", "d", required=True)],
+                        array_param="userids")
+        result = _build_zabbix_params(md, {"userids": ["5", "6"]})
+        self.assertIsInstance(result, list)
+        self.assertEqual(result, ["5", "6"])
+
+    def test_get_method_returns_dict(self):
+        md = MethodDef("host.get", "host_get", "d", read_only=True,
+                        params=[ParamDef("output", "str", "d")])
+        result = _build_zabbix_params(md, {"output": "extend"})
+        self.assertEqual(result, {"output": "extend"})
+
+    def test_array_param_methods_in_registry(self):
+        """All methods with array_param set should exist and be consistent."""
+        array_methods = [m for m in ALL_METHODS if m.array_param is not None]
+        self.assertGreater(len(array_methods), 0)
+        for m in array_methods:
+            param_names = [p.name for p in m.params]
+            self.assertIn(m.array_param, param_names,
+                          f"{m.api_method}: array_param '{m.array_param}' not in params")
 
 
 if __name__ == "__main__":

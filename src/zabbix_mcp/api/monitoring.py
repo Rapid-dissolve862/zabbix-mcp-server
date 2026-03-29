@@ -283,16 +283,18 @@ _HISTORY_CLEAR = MethodDef(
     description=(
         "Clear (delete) history data for the specified items. This permanently "
         "removes all stored historical values for the given items. Use with "
-        "caution as this operation cannot be undone."
+        "caution as this operation cannot be undone. "
+        "Note: not supported when TimescaleDB is used for history storage."
     ),
     read_only=False,
     params=[
         ParamDef(
-            "params", "dict",
-            "Clear history for items. Params: {\"itemids\": [\"id1\", \"id2\"]}",
+            "itemids", "list[str]",
+            "Array of item IDs whose history data should be cleared.",
             required=True,
         ),
     ],
+    array_param="itemids",
 )
 
 _HISTORY_PUSH = MethodDef(
@@ -307,13 +309,15 @@ _HISTORY_PUSH = MethodDef(
     read_only=False,
     params=[
         ParamDef(
-            "params", "dict",
-            "Push history data. Params with itemid, clock, ns, value fields. "
-            "Example: {\"data\": [{\"itemid\": \"12345\", \"clock\": 1609459200, "
-            "\"ns\": 0, \"value\": \"42.5\"}]}",
+            "items", "list",
+            "Array of history objects to push. Each object must have: "
+            "'itemid' (str), 'clock' (int, Unix timestamp), 'ns' (int, nanoseconds), "
+            "'value' (str). Example: [{\"itemid\": \"12345\", \"clock\": 1609459200, "
+            "\"ns\": 0, \"value\": \"42.5\"}]",
             required=True,
         ),
     ],
+    array_param="items",
 )
 
 # ---------------------------------------------------------------------------

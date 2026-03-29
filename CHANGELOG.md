@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.6 — 2026-03-29
+
+### Fixed
+
+- **Array-based API methods broken** — `_do_call` used `obj(**params)` which crashes on list params; `.delete` methods, `history.clear`, `user.unblock`, `user.resettotp`, `token.generate` now correctly pass arrays to the Zabbix API
+- **`history.clear`** — changed from `params: dict` to `itemids: list[str]`; added TimescaleDB note in description
+- **`history.push`** — changed from `params: dict` to `items: list` (array of history objects)
+- **`user.unblock` / `user.resettotp` / `token.generate`** — were sending `{"userids": [...]}` instead of the plain array the API expects
+
+### Added
+
+- `array_param` field on `MethodDef` — declarative way to mark methods that need a plain array passed to the Zabbix API
+- `list` type in `_PYTHON_TYPES` for array-of-objects parameters
+
 ## v1.5 — 2026-03-29
 
 ### Fixed

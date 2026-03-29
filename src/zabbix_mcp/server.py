@@ -41,6 +41,7 @@ _PYTHON_TYPES: dict[str, type] = {
     "int": int,
     "bool": bool,
     "list[str]": list[str],
+    "list": list,
     "dict": dict,
 }
 
@@ -118,6 +119,10 @@ def _build_zabbix_params(
 ) -> Any:
     """Convert tool keyword arguments into Zabbix API parameters."""
     args = {k: v for k, v in kwargs.items() if k != "server" and v is not None}
+
+    # Methods that pass a single param as a plain array (e.g. history.clear, user.unblock)
+    if method_def.array_param and method_def.array_param in args:
+        return args[method_def.array_param]
 
     # Delete methods expect a plain list of IDs
     if "ids" in args and method_def.api_method.endswith(".delete"):

@@ -43,3 +43,4 @@ class MethodDef:
     description: str      # Rich description for LLM consumption
     read_only: bool       # If True, allowed on read-only servers
     params: list[ParamDef] = field(default_factory=list)
+    array_param: str | None = None  # Param to extract as plain list for array-based API methods

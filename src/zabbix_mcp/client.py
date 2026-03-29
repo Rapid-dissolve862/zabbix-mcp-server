@@ -126,7 +126,7 @@ class ClientManager:
             raise ValueError("No Zabbix servers configured")
         return default
 
-    def call(self, server: str, method: str, params: dict[str, Any]) -> Any:
+    def call(self, server: str, method: str, params: Any) -> Any:
         """Execute a Zabbix API call with rate limiting and auto-reconnect."""
         self._rate_limiter.check()
         client = self._get_client(server)
@@ -139,12 +139,15 @@ class ClientManager:
                 return self._do_call(client, method, params)
             raise
 
-    def _do_call(self, client: ZabbixAPI, method: str, params: dict[str, Any]) -> Any:
+    def _do_call(self, client: ZabbixAPI, method: str, params: Any) -> Any:
         """Execute the actual API call by traversing the method path."""
         parts = method.split(".")
         obj: Any = client
         for part in parts:
             obj = getattr(obj, part)
+        # Array-based methods (delete, history.clear, etc.) need positional arg
+        if isinstance(params, list):
+            return obj(params)
         return obj(**params)
 
     def get_version(self, server: str) -> str:

@@ -198,6 +198,7 @@ _USER_METHODS: list[MethodDef] = [
                 required=True,
             ),
         ],
+        array_param="userids",
     ),
     MethodDef(
         api_method="user.unblock",
@@ -216,6 +217,7 @@ _USER_METHODS: list[MethodDef] = [
                 required=True,
             ),
         ],
+        array_param="userids",
     ),
 ]
 
@@ -512,6 +514,7 @@ _TOKEN_METHODS: list[MethodDef] = [
                 required=True,
             ),
         ],
+        array_param="tokenids",
     ),
 ]
 
