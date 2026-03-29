@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.4 — 2026-03-29
+
+### Fixed
+
+- **`configuration.import` snake_case rules error** — LLMs often generate snake_case keys in import rules (e.g. `discovery_rules`, `value_maps`, `template_dashboards`); the server now auto-normalizes them to the camelCase format expected by the Zabbix API
+
 ## v1.3 — 2026-03-29
 
 ### Fixed

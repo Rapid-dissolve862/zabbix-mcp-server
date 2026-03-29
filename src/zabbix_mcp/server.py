@@ -45,6 +45,29 @@ _PYTHON_TYPES: dict[str, type] = {
 }
 
 
+def _snake_to_camel(name: str) -> str:
+    """Convert snake_case to camelCase (e.g. 'discovery_rules' -> 'discoveryRules')."""
+    parts = name.split("_")
+    return parts[0] + "".join(p.capitalize() for p in parts[1:])
+
+
+def _normalize_import_rules(params: dict[str, Any]) -> dict[str, Any]:
+    """Normalize configuration.import rules keys from snake_case to camelCase.
+
+    LLMs often generate snake_case keys (e.g. discovery_rules, value_maps,
+    template_dashboards) but the Zabbix API expects camelCase.
+    """
+    if "rules" not in params or not isinstance(params["rules"], dict):
+        return params
+
+    rules = params["rules"]
+    normalized: dict[str, Any] = {}
+    for key, value in rules.items():
+        normalized[_snake_to_camel(key) if "_" in key else key] = value
+
+    return {**params, "rules": normalized}
+
+
 def _build_zabbix_params(method_def: MethodDef, kwargs: dict[str, Any]) -> Any:
     """Convert tool keyword arguments into Zabbix API parameters."""
     args = {k: v for k, v in kwargs.items() if k != "server" and v is not None}
@@ -55,7 +78,11 @@ def _build_zabbix_params(method_def: MethodDef, kwargs: dict[str, Any]) -> Any:
 
     # create/update/mass/special methods: the 'params' dict IS the API payload
     if "params" in args:
-        return args["params"]
+        params = args["params"]
+        # Normalize snake_case rule keys for configuration import methods
+        if method_def.api_method in ("configuration.import", "configuration.importcompare"):
+            params = _normalize_import_rules(params)
+        return params
 
     # For get methods: build params dict from individual arguments
     params: dict[str, Any] = {}

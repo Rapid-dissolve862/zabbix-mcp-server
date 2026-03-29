@@ -31,7 +31,12 @@ from zabbix_mcp.config import (
     load_config,
 )
 from zabbix_mcp.client import ClientManager, RateLimitError, ReadOnlyError, _RateLimiter
-from zabbix_mcp.server import _BearerTokenVerifier, _register_tools
+from zabbix_mcp.server import (
+    _BearerTokenVerifier,
+    _normalize_import_rules,
+    _register_tools,
+    _snake_to_camel,
+)
 from zabbix_mcp.api import ALL_METHODS
 
 
@@ -237,6 +242,65 @@ class TestToolRegistration(unittest.TestCase):
         _register_tools(mcp, mgr)
         for tool in mcp._tool_manager.list_tools():
             self.assertIn("properties", tool.parameters)
+
+
+class TestImportRulesNormalization(unittest.TestCase):
+    def test_snake_to_camel_basic(self):
+        self.assertEqual(_snake_to_camel("discovery_rules"), "discoveryRules")
+        self.assertEqual(_snake_to_camel("value_maps"), "valueMaps")
+        self.assertEqual(_snake_to_camel("template_dashboards"), "templateDashboards")
+        self.assertEqual(_snake_to_camel("template_linkage"), "templateLinkage")
+        self.assertEqual(_snake_to_camel("media_types"), "mediaTypes")
+        self.assertEqual(_snake_to_camel("host_groups"), "hostGroups")
+
+    def test_snake_to_camel_no_underscore(self):
+        self.assertEqual(_snake_to_camel("hosts"), "hosts")
+        self.assertEqual(_snake_to_camel("templates"), "templates")
+
+    def test_normalize_converts_snake_case_rules(self):
+        params = {
+            "format": "yaml",
+            "source": "<data>",
+            "rules": {
+                "templates": {"createMissing": True},
+                "discovery_rules": {"createMissing": True, "updateExisting": True},
+                "value_maps": {"createMissing": True},
+            },
+        }
+        result = _normalize_import_rules(params)
+        self.assertIn("discoveryRules", result["rules"])
+        self.assertIn("valueMaps", result["rules"])
+        self.assertIn("templates", result["rules"])
+        self.assertNotIn("discovery_rules", result["rules"])
+        self.assertNotIn("value_maps", result["rules"])
+
+    def test_normalize_preserves_camel_case(self):
+        params = {
+            "format": "yaml",
+            "source": "<data>",
+            "rules": {
+                "discoveryRules": {"createMissing": True},
+                "templates": {"createMissing": True},
+            },
+        }
+        result = _normalize_import_rules(params)
+        self.assertIn("discoveryRules", result["rules"])
+        self.assertIn("templates", result["rules"])
+
+    def test_normalize_no_rules_key(self):
+        params = {"format": "yaml", "source": "<data>"}
+        result = _normalize_import_rules(params)
+        self.assertEqual(result, params)
+
+    def test_normalize_preserves_other_params(self):
+        params = {
+            "format": "json",
+            "source": "{}",
+            "rules": {"discovery_rules": {"createMissing": True}},
+        }
+        result = _normalize_import_rules(params)
+        self.assertEqual(result["format"], "json")
+        self.assertEqual(result["source"], "{}")
 
 
 if __name__ == "__main__":
