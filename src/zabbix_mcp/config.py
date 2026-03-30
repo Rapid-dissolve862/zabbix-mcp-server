@@ -55,7 +55,8 @@ class ServerConfig:
     log_level: str = "info"
     log_file: str | None = None
     auth_token: str | None = None
-    rate_limit: int = 60
+    rate_limit: int = 300
+    tools: list[str] | None = None
 
 
 @dataclass(frozen=True)
@@ -90,6 +91,48 @@ def _resolve_env_vars(value: str) -> str:
     return _ENV_VAR_RE.sub(_replace, value)
 
 
+TOOL_GROUPS: dict[str, list[str]] = {
+    "monitoring": [
+        "host", "hostgroup", "hostinterface", "hostprototype",
+        "item", "itemprototype", "trigger", "triggerprototype",
+        "problem", "event", "history", "trend",
+        "graph", "graphitem", "graphprototype",
+        "discoveryrule", "discoveryruleprototype",
+        "dcheck", "dhost", "drule", "dservice", "httptest",
+    ],
+    "data_collection": [
+        "template", "templategroup", "templatedashboard",
+        "valuemap", "dashboard",
+    ],
+    "alerts": [
+        "action", "alert", "mediatype", "script",
+    ],
+    "users": [
+        "user", "usergroup", "userdirectory", "usermacro",
+        "token", "role", "mfa",
+    ],
+    "administration": [
+        "settings", "housekeeping", "authentication", "autoregistration",
+        "configuration", "connector", "correlation", "hanode",
+        "iconmap", "image", "maintenance", "map", "module",
+        "proxy", "proxygroup", "regexp", "report", "task",
+        "auditlog",
+    ],
+}
+
+
+def _expand_tool_groups(tools: list[str]) -> list[str]:
+    """Expand group names (e.g. 'monitoring') into individual tool prefixes."""
+    expanded: list[str] = []
+    for entry in tools:
+        entry = entry.lower()
+        if entry in TOOL_GROUPS:
+            expanded.extend(TOOL_GROUPS[entry])
+        else:
+            expanded.append(entry)
+    return list(dict.fromkeys(expanded))  # deduplicate, preserve order
+
+
 class ConfigError(Exception):
     """Raised when configuration is invalid."""
 
@@ -105,8 +148,15 @@ def load_config(path: str | Path) -> AppConfig:
 
     server_raw = raw.get("server", {})
     transport = server_raw.get("transport", "stdio")
-    if transport not in ("stdio", "http"):
-        raise ConfigError(f"Invalid transport '{transport}', must be 'stdio' or 'http'")
+    if transport not in ("stdio", "http", "sse"):
+        raise ConfigError(f"Invalid transport '{transport}', must be 'stdio', 'http', or 'sse'")
+
+    tools_raw = server_raw.get("tools")
+    tools_filter: list[str] | None = None
+    if tools_raw is not None:
+        if not isinstance(tools_raw, list):
+            raise ConfigError("'tools' must be a list of tool group names")
+        tools_filter = _expand_tool_groups([str(t) for t in tools_raw])
 
     server_config = ServerConfig(
         transport=transport,
@@ -116,6 +166,7 @@ def load_config(path: str | Path) -> AppConfig:
         log_file=server_raw.get("log_file"),
         auth_token=_resolve_env_vars(server_raw["auth_token"]) if server_raw.get("auth_token") else None,
         rate_limit=server_raw.get("rate_limit", 60),
+        tools=tools_filter,
     )
 
     zabbix_raw = raw.get("zabbix", {})

@@ -1,5 +1,41 @@
 # Changelog
 
+## v1.9 — 2026-03-30
+
+### Added
+
+- **SSE transport** — new `transport = "sse"` option for MCP clients that do not support Streamable HTTP session management (e.g. n8n); authentication via `auth_token` is supported for both HTTP and SSE transports
+- **Tool filtering with categories** — new `tools` config option to limit which tools are exposed via MCP; useful when your LLM has a tool limit (e.g. OpenAI max 128 tools); supports five category names that expand into their tool groups:
+  - `"monitoring"` — 77 tools (host, item, trigger, problem, event, history, etc.)
+  - `"data_collection"` — 27 tools (template, templategroup, dashboard, valuemap, etc.)
+  - `"alerts"` — 16 tools (action, alert, mediatype, script)
+  - `"users"` — 39 tools (user, usergroup, role, token, usermacro, etc.)
+  - `"administration"` — 59 tools (maintenance, proxy, configuration, settings, etc.)
+  - Categories and individual tool prefixes can be mixed: `tools = ["monitoring", "template", "action"]`
+  - When not set, all ~220 tools are registered (default)
+  - `health_check` and `zabbix_raw_api_call` are always registered regardless of this setting
+- **`.mcp.json.example`** — example MCP client configuration for VS Code, Claude Code, Cursor, Windsurf and other editors
+- **`selectPages` for `dashboard_get`** — new direct parameter to include dashboard pages and widgets in the output without needing `extra_params`
+
+### Fixed
+
+- **`severity_min` on `event_get` / `problem_get`** — Zabbix 7.x dropped `severity_min` in favor of `severities` (integer array); the server now transparently converts `severity_min=3` to `severities=[3,4,5]` so existing tool calls continue to work
+- **Response truncation produces valid JSON** — large API responses (>50KB) are now truncated at the data level (removing list items) instead of slicing the JSON string mid-object; truncated responses include `_truncated`, `_total_count`, and `_returned` metadata
+- **Preprocessing `sortorder` auto-stripped** — Zabbix API rejects `sortorder` in preprocessing step objects (order is determined by array position); the server now silently removes it before sending
+- **Preprocessing `params` list auto-conversion** — when preprocessing params are passed as a list (e.g. from YAML template format `["pattern", "output"]`), the server auto-converts to the newline-joined string format the API expects
+- **Auto-fill `delay` for active polling items** — `item_create` / `itemprototype_create` now auto-fill `delay: "1m"` when not provided for active item types (SNMP_AGENT, HTTP_AGENT, SIMPLE_CHECK, etc.); passive types (TRAPPER, DEPENDENT, CALCULATED) are excluded
+- **Valuemap name resolution scoped to template** — `valuemap.get` lookup now filters by host/template ID to prevent returning wrong valuemap when multiple templates use the same name; clear error on ambiguity
+- **Structured JSON error responses** — all error returns are now `{"error": true, "message": "...", "type": "ErrorType"}` instead of plain strings, enabling programmatic error handling
+- **`script_getscriptsbyhosts`** — fixed array parameter handling; Zabbix 7.x expects `[{"hostid": "..."}]` objects, not plain ID arrays
+- **`script_getscriptsbyevents`** — same fix for event ID array format
+- **`user_checkauthentication`** — no longer injects `output: "extend"` which this method does not accept
+- **`usermacro_deleteglobal`** — fixed routing (`.deleteglobal` was not matched by `.delete` check), added `array_param`, and integer ID conversion
+
+### Improved
+
+- **Rate limit 300 calls/minute per client** — increased from 60, now tracked independently per MCP client session so concurrent clients don't compete for the same budget
+- **`trigger_get` `min_severity` description** — updated to list symbolic severity names (NOT_CLASSIFIED, INFORMATION, WARNING, AVERAGE, HIGH, DISASTER)
+
 ## v1.8 — 2026-03-29
 
 ### Added

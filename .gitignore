@@ -10,3 +10,11 @@ build/
 !config.example.toml
 !pyproject.toml
 social-preview.html
+.mcp.json
+node_modules/
+test-results/
+tests/ISSUES*.md
+tests/mcp_test_helper.py
+tests/stress_test_*.py
+tests/verify_ui.js
+tests/integration/

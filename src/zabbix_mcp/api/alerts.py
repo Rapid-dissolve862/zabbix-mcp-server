@@ -339,6 +339,7 @@ _SCRIPT_METHODS: list[MethodDef] = [
             "Useful for building dynamic script menus in event detail views."
         ),
         read_only=True,
+        array_param="eventids",
         params=[
             ParamDef(
                 "eventids", "list[str]",
@@ -357,6 +358,7 @@ _SCRIPT_METHODS: list[MethodDef] = [
             "dynamic script menus in host detail views."
         ),
         read_only=True,
+        array_param="hostids",
         params=[
             ParamDef(
                 "hostids", "list[str]",

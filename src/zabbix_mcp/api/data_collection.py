@@ -357,7 +357,7 @@ _TRIGGER_GET_EXTRA: list[ParamDef] = [
     ParamDef("hostids", "list[str]", "Return only triggers that belong to the given hosts."),
     ParamDef("templateids", "list[str]", "Return only triggers that belong to the given templates."),
     ParamDef("only_true", "bool", "Only return triggers that are currently in a problem (PROBLEM) state."),
-    ParamDef("min_severity", "int", "Minimum severity to return: 0=Not classified, 1=Information, 2=Warning, 3=Average, 4=High, 5=Disaster."),
+    ParamDef("min_severity", "int", "Minimum trigger severity to return (0-5: NOT_CLASSIFIED, INFORMATION, WARNING, AVERAGE, HIGH, DISASTER)", required=False),
     ParamDef("with_unacknowledged_events", "bool", "Only return triggers that have unacknowledged problem events."),
     ParamDef("active", "bool", "Only return enabled triggers that belong to enabled hosts."),
     ParamDef("monitored", "bool", "Only return enabled triggers that belong to enabled hosts and contain only enabled items."),
@@ -1006,6 +1006,7 @@ _USERMACRO_METHODS: list[MethodDef] = [
         tool_name="usermacro_deleteglobal",
         description="Delete global user macros by their IDs.",
         read_only=False,
+        array_param="ids",
         params=[
             ParamDef(
                 "ids", "list[str]",

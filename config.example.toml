@@ -21,6 +21,9 @@
 # Transport protocol for MCP communication.
 #   "http"  - Recommended. Runs a standalone HTTP server that MCP clients
 #             connect to via URL (e.g. http://127.0.0.1:8080/mcp).
+#   "sse"   - Server-Sent Events transport. Runs an HTTP server that MCP clients
+#             connect to via URL (e.g. http://127.0.0.1:8080/sse). Use this for
+#             clients that do not support Streamable HTTP session management.
 #   "stdio" - Communicates over stdin/stdout. Used when an MCP client
 #             launches the server as a subprocess (e.g. Claude Desktop local mode).
 transport = "http"
@@ -54,11 +57,98 @@ log_file = "/var/log/zabbix-mcp/server.log"
 # Option 2 - token from environment variable (recommended for production):
 # auth_token = "${MCP_AUTH_TOKEN}"
 
-# Maximum number of Zabbix API calls per minute (sliding window).
+# Maximum number of Zabbix API calls per minute per client (sliding window).
+# Each MCP client session gets its own independent counter.
 # Protects the Zabbix server from being overwhelmed by rapid AI requests.
 # Set to 0 to disable rate limiting.
-# Default: 60.
-rate_limit = 60
+# Default: 300.
+rate_limit = 300
+
+# Filter which tool groups are exposed via MCP.
+# When not set or commented out, all ~220 tools are registered (default).
+# This is useful when your LLM has a tool limit (e.g. OpenAI max 128 tools).
+#
+# Use category names to include entire groups at once, individual tool prefixes,
+# or mix both. The "health_check" and "zabbix_raw_api_call" tools are always
+# registered regardless of this setting.
+#
+# Default (all tools):
+# tools = ["monitoring", "data_collection", "alerts", "users", "administration"]
+#
+# Categories and their tools:
+#
+#   "monitoring" (77 tools):
+#     dcheck_get
+#     dhost_get
+#     discoveryrule_create, discoveryrule_delete, discoveryrule_get, discoveryrule_update
+#     discoveryruleprototype_create, discoveryruleprototype_delete, discoveryruleprototype_get, discoveryruleprototype_update
+#     drule_create, drule_delete, drule_get, drule_update
+#     dservice_get
+#     event_acknowledge, event_get
+#     graph_create, graph_delete, graph_get, graph_update
+#     graphitem_get
+#     graphprototype_create, graphprototype_delete, graphprototype_get, graphprototype_update
+#     history_clear, history_get, history_push
+#     host_create, host_delete, host_get, host_massadd, host_massremove, host_massupdate, host_update
+#     hostgroup_create, hostgroup_delete, hostgroup_get, hostgroup_massadd, hostgroup_massremove, hostgroup_massupdate, hostgroup_propagate, hostgroup_update
+#     hostinterface_create, hostinterface_delete, hostinterface_get, hostinterface_massadd, hostinterface_massremove, hostinterface_replacehostinterfaces, hostinterface_update
+#     hostprototype_create, hostprototype_delete, hostprototype_get, hostprototype_update
+#     httptest_create, httptest_delete, httptest_get, httptest_update
+#     item_create, item_delete, item_get, item_update
+#     itemprototype_create, itemprototype_delete, itemprototype_get, itemprototype_update
+#     problem_get
+#     trend_get
+#     trigger_create, trigger_delete, trigger_get, trigger_update
+#     triggerprototype_create, triggerprototype_delete, triggerprototype_get, triggerprototype_update
+#
+#   "data_collection" (27 tools):
+#     dashboard_create, dashboard_delete, dashboard_get, dashboard_update
+#     template_create, template_delete, template_get, template_massadd, template_massremove, template_massupdate, template_update
+#     templatedashboard_create, templatedashboard_delete, templatedashboard_get, templatedashboard_update
+#     templategroup_create, templategroup_delete, templategroup_get, templategroup_massadd, templategroup_massremove, templategroup_massupdate, templategroup_propagate, templategroup_update
+#     valuemap_create, valuemap_delete, valuemap_get, valuemap_update
+#
+#   "alerts" (16 tools):
+#     action_create, action_delete, action_get, action_update
+#     alert_get
+#     mediatype_create, mediatype_delete, mediatype_get, mediatype_update
+#     script_create, script_delete, script_execute, script_get, script_getscriptsbyevents, script_getscriptsbyhosts, script_update
+#
+#   "users" (39 tools):
+#     mfa_create, mfa_delete, mfa_get, mfa_update
+#     role_create, role_delete, role_get, role_update
+#     token_create, token_delete, token_generate, token_get, token_update
+#     user_checkauthentication, user_create, user_delete, user_get, user_login, user_logout, user_provision, user_resettotp, user_unblock, user_update
+#     userdirectory_create, userdirectory_delete, userdirectory_get, userdirectory_test, userdirectory_update
+#     usergroup_create, usergroup_delete, usergroup_get, usergroup_update
+#     usermacro_create, usermacro_createglobal, usermacro_delete, usermacro_deleteglobal, usermacro_get, usermacro_update, usermacro_updateglobal
+#
+#   "administration" (59 tools):
+#     auditlog_get
+#     authentication_get, authentication_update
+#     autoregistration_get, autoregistration_update
+#     configuration_export, configuration_import, configuration_importcompare
+#     connector_create, connector_delete, connector_get, connector_update
+#     correlation_create, correlation_delete, correlation_get, correlation_update
+#     hanode_get
+#     housekeeping_get, housekeeping_update
+#     iconmap_create, iconmap_delete, iconmap_get, iconmap_update
+#     image_create, image_delete, image_get, image_update
+#     maintenance_create, maintenance_delete, maintenance_get, maintenance_update
+#     map_create, map_delete, map_get, map_update
+#     module_create, module_delete, module_get, module_update
+#     proxy_create, proxy_delete, proxy_get, proxy_update
+#     proxygroup_create, proxygroup_delete, proxygroup_get, proxygroup_update
+#     regexp_create, regexp_delete, regexp_get, regexp_update
+#     report_create, report_delete, report_get, report_update
+#     settings_get, settings_update
+#     task_create, task_get
+#
+# Examples:
+#   tools = ["monitoring"]
+#   tools = ["monitoring", "data_collection", "alerts"]
+#   tools = ["host", "problem", "trigger", "template"]
+#   tools = ["monitoring", "template", "action", "dashboard"]
 
 # ---------------------------------------------------------------------------
 # Zabbix servers

@@ -50,6 +50,11 @@ _DASHBOARD_GET = MethodDef(
             "dashboardids", "list[str]",
             "Return only dashboards with the given IDs.",
         ),
+        ParamDef(
+            "selectPages", "str",
+            "Include dashboard pages and their widgets in the output. "
+            "Set to 'extend' to return all page/widget fields.",
+        ),
     ],
 )
 

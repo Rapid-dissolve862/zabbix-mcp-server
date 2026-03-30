@@ -393,12 +393,23 @@ def _normalize_preprocessing(params: dict[str, Any]) -> dict[str, Any]:
     if "preprocessing" not in params or not isinstance(params["preprocessing"], list):
         return params
 
-    steps = params["preprocessing"]
+    steps = [step.copy() if isinstance(step, dict) else step for step in params["preprocessing"]]
     changed = False
 
     for step in steps:
         if not isinstance(step, dict):
             continue
+
+        # Strip sortorder — Zabbix API rejects it; order is array-position.
+        if "sortorder" in step:
+            del step["sortorder"]
+            changed = True
+
+        # Auto-convert params from list to newline-joined string
+        # (YAML template exports use list format, API expects string).
+        if isinstance(step.get("params"), list):
+            step["params"] = "\n".join(str(p) for p in step["params"])
+            changed = True
 
         # Resolve symbolic type name
         if "type" in step:
@@ -688,10 +699,22 @@ def _build_zabbix_params(
 
     # Methods that pass a single param as a plain array (e.g. history.clear, user.unblock)
     if method_def.array_param and method_def.array_param in args:
-        return args[method_def.array_param]
+        values = args[method_def.array_param]
+        if method_def.api_method.endswith("deleteglobal"):
+            values = [int(v) for v in values]
+        # script.getscriptsbyhosts / getscriptsbyevents (Zabbix 7.x) expect an
+        # array of objects: [{"hostid": "1"}, ...] or [{"eventid": "2"}, ...]
+        if method_def.api_method == "script.getscriptsbyhosts":
+            return [{"hostid": v} for v in values]
+        if method_def.api_method == "script.getscriptsbyevents":
+            return [{"eventid": v} for v in values]
+        return values
 
     # Delete methods expect a plain list of IDs
-    if "ids" in args and method_def.api_method.endswith(".delete"):
+    if "ids" in args and (
+        method_def.api_method.endswith(".delete")
+        or method_def.api_method.endswith(".deleteglobal")
+    ):
         return args["ids"]
 
     # create/update/mass/special methods: the 'params' dict IS the API payload
@@ -708,6 +731,14 @@ def _build_zabbix_params(
             params = _normalize_nested_interfaces(params)
             params = _normalize_nested_dchecks(params)
             params = _normalize_timestamps(params)
+            # Auto-fill default delay for active polling item types on create.
+            # Types that do NOT need delay: TRAPPER(2), INTERNAL(5),
+            # CALCULATED(15), SNMP_TRAP(17), DEPENDENT(18).
+            if method_def.api_method in ("item.create", "itemprototype.create"):
+                _NO_DELAY_TYPES = {2, 5, 15, 17, 18}
+                item_type = int(params.get("type", -1))
+                if "delay" not in params and item_type not in _NO_DELAY_TYPES and item_type >= 0:
+                    params["delay"] = "1m"
         return params
 
     # For get methods: build params dict from individual arguments
@@ -727,11 +758,26 @@ def _build_zabbix_params(
             params[param_def.name] = value
 
     # Default output to "extend" so LLMs get full objects, not just IDs
-    if method_def.read_only and "output" not in params and "countOutput" not in params:
+    if (
+        method_def.read_only
+        and "output" not in params
+        and "countOutput" not in params
+        and method_def.api_method != "user.checkAuthentication"
+    ):
         params["output"] = "extend"
 
     # Convert ISO timestamps in get params (e.g. time_from, time_till)
     params = _normalize_timestamps(params)
+
+    # Convert severity_min → severities for event.get and problem.get
+    # Zabbix 7.x dropped severity_min; the API expects severities (int array).
+    if (
+        method_def.api_method in ("event.get", "problem.get")
+        and "severity_min" in params
+    ):
+        sev_min = params.pop("severity_min")
+        if isinstance(sev_min, int) and 0 <= sev_min <= 5:
+            params["severities"] = list(range(sev_min, 6))
 
     # Merge extra_params (selectXxx, etc.) — typed params take precedence
     if "extra_params" in args and isinstance(args["extra_params"], dict):
@@ -775,27 +821,110 @@ def _resolve_valuemap_by_name(
 
     vm_name = vm["name"]
 
-    # Look up valuemap by exact name match
-    matches = client_manager.call(server_name, "valuemap.get", {
-        "output": ["valuemapid"],
+    # Look up valuemap by exact name match, scoped to the host/template if possible
+    get_params: dict[str, Any] = {
+        "output": ["valuemapid", "name"],
         "filter": {"name": vm_name},
-        "limit": 2,
-    })
+    }
+
+    # Scope the search to the specific template/host to avoid ambiguity when
+    # multiple templates define valuemaps with the same name (e.g. "Service state").
+    host_id = params.get("hostid")
+    if host_id:
+        get_params["hostids"] = [host_id]
+
+    matches = client_manager.call(server_name, "valuemap.get", get_params)
 
     if not matches:
+        if host_id:
+            raise ValueError(
+                f"Valuemap '{vm_name}' not found on hostid '{host_id}'. "
+                f"Create it first with valuemap_create or use 'valuemapid' directly."
+            )
         raise ValueError(
             f"Valuemap '{vm_name}' not found. "
             f"Create it first with valuemap_create or use 'valuemapid' directly."
         )
     if len(matches) > 1:
+        ids = ", ".join(m["valuemapid"] for m in matches)
         raise ValueError(
-            f"Multiple valuemaps named '{vm_name}' found. "
-            f"Use 'valuemapid' to specify which one."
+            f"Multiple valuemaps named '{vm_name}' found (IDs: {ids}). "
+            f"Use 'valuemapid' to specify the exact one, or provide 'hostid' "
+            f"in params to scope the lookup to a specific template/host."
         )
 
     result = {**params, "valuemapid": matches[0]["valuemapid"]}
     del result["valuemap"]
     return result
+
+
+_RESPONSE_MAX_CHARS = 50000
+
+
+def _truncate_result(result: Any, *, max_chars: int = _RESPONSE_MAX_CHARS) -> str:
+    """Serialize *result* to JSON, truncating data before serialization so the
+    output is always valid JSON.
+
+    If the compact JSON is already within *max_chars*, return it (with indent).
+    If *result* is a list, progressively reduce the number of items until the
+    serialized output fits, and append a truncation metadata object.
+    For non-list results, fall back to compact (no-indent) JSON and, if still
+    too large, include only a summary object.
+    """
+
+    def _dumps(obj: Any, indent: int | None = 2) -> str:
+        return json.dumps(obj, indent=indent, default=str, ensure_ascii=False)
+
+    # Fast path: fits with pretty-printing
+    text = _dumps(result)
+    if len(text) <= max_chars:
+        return text
+
+    # For lists: find how many items fit within the limit
+    if isinstance(result, list):
+        total = len(result)
+
+        # Reserve space for the truncation metadata appended at the end
+        meta_template = {"_truncated": True, "_total_count": total, "_returned": 0}
+        meta_overhead = len(_dumps(meta_template, indent=None)) + 10  # comma + whitespace
+        budget = max_chars - meta_overhead
+
+        # Binary search for the maximum number of items that fit
+        lo, hi = 0, total
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            if len(_dumps(result[:mid])) <= budget:
+                lo = mid
+            else:
+                hi = mid - 1
+
+        if lo == 0:
+            # Even a single item exceeds budget — return summary only
+            return _dumps({
+                "_truncated": True,
+                "_total_count": total,
+                "_returned": 0,
+                "_error": "Single result item exceeds maximum response size",
+                "_max_size": max_chars,
+            })
+        truncated_list = result[:lo]
+        meta = {"_truncated": True, "_total_count": total, "_returned": lo}
+        truncated_list.append(meta)
+        return _dumps(truncated_list)
+
+    # Non-list result (dict, scalar, etc.): try compact JSON
+    compact = _dumps(result, indent=None)
+    if len(compact) <= max_chars:
+        return compact
+
+    # Last resort: return a summary indicating the data was too large
+    summary = {
+        "_truncated": True,
+        "_error": "Result too large to return",
+        "_original_size": len(compact),
+        "_max_size": max_chars,
+    }
+    return _dumps(summary)
 
 
 def _make_tool_handler(
@@ -809,7 +938,7 @@ def _make_tool_handler(
     async def handler(**kwargs: Any) -> str:
         server_name = kwargs.get("server") or client_manager.default_server
         if not server_name:
-            return "Error: No Zabbix server configured."
+            return json.dumps({"error": True, "message": "No Zabbix server configured.", "type": "ConfigurationError"})
 
         try:
             server_name = client_manager.resolve_server(server_name)
@@ -823,19 +952,15 @@ def _make_tool_handler(
                 params, method_def.api_method, client_manager, server_name,
             )
             result = client_manager.call(server_name, method_def.api_method, params)
-
-            text = json.dumps(result, indent=2, default=str, ensure_ascii=False)
-            if len(text) > 50000:
-                text = text[:50000] + "\n\n... [truncated, use 'limit' parameter to reduce results]"
-            return text
+            return _truncate_result(result)
 
         except (ReadOnlyError, RateLimitError) as e:
-            return f"Error: {e}"
+            return json.dumps({"error": True, "message": str(e), "type": type(e).__name__})
         except ValueError as e:
-            return f"Error: {e}"
+            return json.dumps({"error": True, "message": str(e), "type": type(e).__name__})
         except Exception as e:
             logger.exception("Error calling %s on server '%s'", method_def.api_method, server_name)
-            return f"Error calling {method_def.api_method}: {e}"
+            return json.dumps({"error": True, "message": f"Error calling {method_def.api_method}: {e}", "type": type(e).__name__})
 
     # Build a dynamic function signature so FastMCP generates proper JSON Schema
     sig_params: list[inspect.Parameter] = []
@@ -876,12 +1001,26 @@ def _make_tool_handler(
     return handler
 
 
-def _register_tools(mcp: FastMCP, client_manager: ClientManager) -> int:
-    """Register all Zabbix API methods as MCP tools. Returns tool count."""
+def _register_tools(
+    mcp: FastMCP,
+    client_manager: ClientManager,
+    tools_filter: list[str] | None = None,
+) -> int:
+    """Register Zabbix API methods as MCP tools. Returns tool count.
+
+    When *tools_filter* is ``None`` (default), all tools are registered.
+    Otherwise only tools whose prefix matches an entry in the list are
+    registered (e.g. ``["host", "problem"]`` registers ``host_get``,
+    ``host_create``, ``problem_get``, etc.).
+    """
     server_names = client_manager.server_names
     count = 0
 
     for method_def in ALL_METHODS:
+        if tools_filter is not None:
+            prefix = method_def.tool_name.rsplit("_", 1)[0]
+            if prefix not in tools_filter:
+                continue
         handler = _make_tool_handler(method_def, client_manager, server_names)
         mcp.add_tool(handler, name=method_def.tool_name, description=method_def.description)
         count += 1
@@ -902,16 +1041,13 @@ def _register_tools(mcp: FastMCP, client_manager: ClientManager) -> int:
         by dedicated tools, or for advanced/undocumented API calls."""
         server_name = server or client_manager.default_server
         if not server_name:
-            return "Error: No Zabbix server configured."
+            return json.dumps({"error": True, "message": "No Zabbix server configured.", "type": "ConfigurationError"})
         try:
             server_name = client_manager.resolve_server(server_name)
             result = client_manager.call(server_name, method, params or {})
-            text = json.dumps(result, indent=2, default=str, ensure_ascii=False)
-            if len(text) > 50000:
-                text = text[:50000] + "\n\n... [truncated]"
-            return text
+            return _truncate_result(result)
         except Exception as e:
-            return f"Error: {e}"
+            return json.dumps({"error": True, "message": str(e), "type": type(e).__name__})
 
     mcp.add_tool(zabbix_raw_api_call)
     count += 1
@@ -971,7 +1107,7 @@ def run_server(
 
     # Set up bearer token auth for HTTP transport
     auth_kwargs: dict[str, Any] = {}
-    if config.server.auth_token and transport == "http":
+    if config.server.auth_token and transport in ("http", "sse"):
         server_url = f"http://{host}:{port}"
         auth_kwargs["token_verifier"] = _BearerTokenVerifier(config.server.auth_token)
         auth_kwargs["auth"] = AuthSettings(
@@ -979,7 +1115,7 @@ def run_server(
             resource_server_url=server_url,
         )
         logger.info("Bearer token authentication enabled")
-    elif transport == "http" and not config.server.auth_token:
+    elif transport in ("http", "sse") and not config.server.auth_token:
         logger.warning("No auth_token configured - HTTP server is unauthenticated!")
 
     mcp = FastMCP(
@@ -996,12 +1132,17 @@ def run_server(
         **auth_kwargs,
     )
 
-    tool_count = _register_tools(mcp, client_manager)
-    logger.info("Registered %d tools", tool_count)
+    tool_count = _register_tools(mcp, client_manager, config.server.tools)
+    if config.server.tools:
+        logger.info("Registered %d tools (filtered: %s)", tool_count, ", ".join(config.server.tools))
+    else:
+        logger.info("Registered %d tools", tool_count)
 
     try:
         if transport == "http":
             mcp.run(transport="streamable-http")
+        elif transport == "sse":
+            mcp.run(transport="sse")
         else:
             mcp.run(transport="stdio")
     finally:

@@ -27,7 +27,7 @@ We will acknowledge your report within 48 hours and work with you on a fix.
 - The server binds to `127.0.0.1` (localhost) by default — not accessible from the network
 - If you bind to `0.0.0.0`, always set `auth_token` to protect the endpoint
 - Use a reverse proxy (nginx, Caddy) with TLS for production deployments exposed to the network
-- The `rate_limit` config option protects the Zabbix API from being overwhelmed (default: 60 calls/minute)
+- The `rate_limit` config option protects the Zabbix API from being overwhelmed (default: 300 calls/minute per client)
 
 ### Read-Only Mode
 
@@ -39,5 +39,5 @@ We will acknowledge your report within 48 hours and work with you on a fix.
 
 | Version | Supported |
 |---|---|
-| 1.1 (latest) | Yes |
-| < 1.1 | No |
+| 1.9 (latest) | Yes |
+| < 1.9 | No |

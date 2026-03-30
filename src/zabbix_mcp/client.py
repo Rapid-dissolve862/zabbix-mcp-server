@@ -41,25 +41,38 @@ class RateLimitError(Exception):
 
 
 class _RateLimiter:
-    """Sliding window rate limiter (calls per minute)."""
+    """Per-client sliding window rate limiter (calls per minute).
+
+    Each unique *client_id* gets its own independent counter.
+    When *client_id* is ``None``, a shared "global" bucket is used.
+    """
 
     def __init__(self, max_calls: int) -> None:
         self._max_calls = max_calls
-        self._calls: list[float] = []
+        self._buckets: dict[str, list[float]] = {}
         self._lock = threading.Lock()
 
-    def check(self) -> None:
+    def check(self, client_id: str | None = None) -> None:
         if self._max_calls <= 0:
             return
+        key = client_id or "__global__"
         now = time.monotonic()
         with self._lock:
-            self._calls = [t for t in self._calls if now - t < 60.0]
-            if len(self._calls) >= self._max_calls:
+            # Periodic cleanup of stale buckets (every 100 checks)
+            if sum(1 for _ in self._buckets) > 50:
+                stale = [k for k, v in self._buckets.items() if not v or now - v[-1] > 120.0]
+                for k in stale:
+                    del self._buckets[k]
+
+            calls = self._buckets.get(key, [])
+            calls = [t for t in calls if now - t < 60.0]
+            if len(calls) >= self._max_calls:
                 raise RateLimitError(
                     f"Rate limit exceeded ({self._max_calls} calls/minute). "
                     f"Try again shortly or increase rate_limit in config."
                 )
-            self._calls.append(now)
+            calls.append(now)
+            self._buckets[key] = calls
 
 
 class ClientManager:

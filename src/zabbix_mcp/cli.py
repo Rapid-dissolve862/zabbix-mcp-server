@@ -42,7 +42,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--transport",
-        choices=["stdio", "http"],
+        choices=["stdio", "http", "sse"],
         help="Override transport from config",
     )
     parser.add_argument(
