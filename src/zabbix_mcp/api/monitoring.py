@@ -45,6 +45,7 @@ _DASHBOARD_GET = MethodDef(
         "in the filter to include related objects."
     ),
     read_only=True,
+    compact_fields=("dashboardid", "name"),
     params=COMMON_GET_PARAMS + [
         ParamDef(
             "dashboardids", "list[str]",
@@ -110,6 +111,7 @@ _TEMPLATEDASHBOARD_GET = MethodDef(
         "specific templates, or by dashboardids for direct lookup."
     ),
     read_only=True,
+    compact_fields=("dashboardid", "name", "templateid"),
     params=COMMON_GET_PARAMS + [
         ParamDef(
             "templateids", "list[str]",
@@ -170,6 +172,7 @@ _REPORT_GET = MethodDef(
         "reports generated from specific dashboards."
     ),
     read_only=True,
+    compact_fields=("reportid", "name", "status"),
     params=COMMON_GET_PARAMS + [
         ParamDef(
             "reportids", "list[str]",
@@ -230,6 +233,7 @@ _HANODE_GET = MethodDef(
         "nodes are managed by the Zabbix server process, not via the API."
     ),
     read_only=True,
+    compact_fields=("ha_nodeid", "name", "status", "address"),
     params=COMMON_GET_PARAMS + [
         ParamDef(
             "ha_nodeids", "list[str]",
@@ -376,6 +380,7 @@ _EVENT_GET = MethodDef(
         "for time-bounded queries and 'severity_min' to filter by importance."
     ),
     read_only=True,
+    compact_fields=("eventid", "name", "severity", "clock", "value", "r_eventid"),
     params=COMMON_GET_PARAMS + [
         ParamDef(
             "eventids", "list[str]",
@@ -492,6 +497,7 @@ _PROBLEM_GET = MethodDef(
         "30 minutes."
     ),
     read_only=True,
+    compact_fields=("eventid", "name", "severity", "clock", "r_clock"),
     params=COMMON_GET_PARAMS + [
         ParamDef(
             "eventids", "list[str]",
@@ -571,6 +577,7 @@ _MAP_GET = MethodDef(
         "map structure details."
     ),
     read_only=True,
+    compact_fields=("sysmapid", "name"),
     params=COMMON_GET_PARAMS + [
         ParamDef(
             "sysmapids", "list[str]",
@@ -625,6 +632,7 @@ _TASK_GET = MethodDef(
         "to monitor the status of previously created tasks."
     ),
     read_only=True,
+    compact_fields=("taskid", "type", "status"),
     params=COMMON_GET_PARAMS + [
         ParamDef(
             "taskids", "list[str]",
@@ -668,6 +676,7 @@ _SLA_GET = MethodDef(
         "selectSchedule in extra_params to include related objects."
     ),
     read_only=True,
+    compact_fields=("slaid", "name", "slo", "status"),
     params=COMMON_GET_PARAMS + [
         ParamDef(
             "slaids", "list[str]",

@@ -67,6 +67,7 @@ _USER_METHODS: list[MethodDef] = [
             "particular notification channel."
         ),
         read_only=True,
+        compact_fields=("userid", "username", "name", "surname", "roleid"),
         params=COMMON_GET_PARAMS + _USER_GET_EXTRA,
     ),
     MethodDef(
@@ -252,6 +253,7 @@ _USERGROUP_METHODS: list[MethodDef] = [
             "group members, and selectTagFilters for tag-based permissions."
         ),
         read_only=True,
+        compact_fields=("usrgrpid", "name"),
         params=COMMON_GET_PARAMS + _USERGROUP_GET_EXTRA,
     ),
     MethodDef(
@@ -313,6 +315,7 @@ _USERDIRECTORY_METHODS: list[MethodDef] = [
             "connection parameters, attribute mappings, and user group assignments."
         ),
         read_only=True,
+        compact_fields=("userdirectoryid", "name", "idp_type"),
         params=COMMON_GET_PARAMS + _USERDIRECTORY_GET_EXTRA,
     ),
     MethodDef(
@@ -396,6 +399,7 @@ _ROLE_METHODS: list[MethodDef] = [
             "permission rule set for each role."
         ),
         read_only=True,
+        compact_fields=("roleid", "name", "type"),
         params=COMMON_GET_PARAMS + _ROLE_GET_EXTRA,
     ),
     MethodDef(
@@ -458,6 +462,7 @@ _TOKEN_METHODS: list[MethodDef] = [
             "and can be enabled or disabled independently."
         ),
         read_only=True,
+        compact_fields=("tokenid", "name", "userid", "status", "expires_at"),
         params=COMMON_GET_PARAMS + _TOKEN_GET_EXTRA,
     ),
     MethodDef(

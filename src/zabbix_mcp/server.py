@@ -764,6 +764,7 @@ def _build_zabbix_params(
     zabbix_version: str | None = None,
     *,
     allowed_import_dirs: list[str] | None = None,
+    compact_output: bool = True,
 ) -> Any:
     """Convert tool keyword arguments into Zabbix API parameters."""
     args = {k: v for k, v in kwargs.items() if k != "server" and v is not None}
@@ -836,8 +837,9 @@ def _build_zabbix_params(
                 value = [f.strip() for f in value.split(",")]
             params[param_def.name] = value
 
-    # Default output to "extend" so LLMs get full objects, not just IDs.
-    # Only add if the method actually accepts an "output" parameter.
+    # Default output: use compact fields (key fields only) when available
+    # and compact_output is enabled, otherwise fall back to "extend" (all fields).
+    # The LLM can always override by explicitly passing the output parameter.
     has_output_param = any(p.name == "output" for p in method_def.params)
     if (
         method_def.read_only
@@ -845,7 +847,10 @@ def _build_zabbix_params(
         and "output" not in params
         and "countOutput" not in params
     ):
-        params["output"] = "extend"
+        if compact_output and method_def.compact_fields:
+            params["output"] = list(method_def.compact_fields)
+        else:
+            params["output"] = "extend"
 
     # Convert ISO timestamps in get params (e.g. time_from, time_till)
     params = _normalize_timestamps(params)
@@ -1017,6 +1022,7 @@ def _make_tool_handler(
     server_names: list[str],
     *,
     allowed_import_dirs: list[str] | None = None,
+    compact_output: bool = True,
 ):
     """Create a tool handler with a proper typed signature for FastMCP schema generation."""
 
@@ -1038,6 +1044,7 @@ def _make_tool_handler(
             params = _build_zabbix_params(
                 method_def, kwargs, zabbix_version,
                 allowed_import_dirs=allowed_import_dirs,
+                compact_output=compact_output,
             )
             params = await asyncio.to_thread(
                 _resolve_valuemap_by_name,
@@ -1102,6 +1109,7 @@ def _register_tools(
     disabled_tools: list[str] | None = None,
     *,
     allowed_import_dirs: list[str] | None = None,
+    compact_output: bool = True,
 ) -> int:
     """Register Zabbix API methods as MCP tools. Returns tool count.
 
@@ -1127,6 +1135,7 @@ def _register_tools(
         handler = _make_tool_handler(
             method_def, client_manager, server_names,
             allowed_import_dirs=allowed_import_dirs,
+            compact_output=compact_output,
         )
         mcp.add_tool(handler, name=method_def.tool_name, description=method_def.description)
         count += 1
@@ -1406,6 +1415,7 @@ def run_server(
     tool_count = _register_tools(
         mcp, client_manager, config.server.tools, config.server.disabled_tools,
         allowed_import_dirs=config.server.allowed_import_dirs,
+        compact_output=config.server.compact_output,
     )
     if config.server.tools or config.server.disabled_tools:
         parts = []

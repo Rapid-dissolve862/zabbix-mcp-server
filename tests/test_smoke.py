@@ -1203,6 +1203,56 @@ class TestDefaultOutput(unittest.TestCase):
         result = _build_zabbix_params(md, {"params": {"host": "test"}})
         self.assertNotIn("output", result)
 
+    def test_compact_output_uses_compact_fields(self):
+        """When compact_output=True and compact_fields defined, use them."""
+        md = MethodDef("host.get", "host_get", "d", read_only=True,
+                        params=[ParamDef("output", "str", "d")],
+                        compact_fields=("hostid", "host", "name", "status"))
+        result = _build_zabbix_params(md, {}, compact_output=True)
+        self.assertEqual(result["output"], ["hostid", "host", "name", "status"])
+
+    def test_compact_output_disabled_uses_extend(self):
+        """When compact_output=False, always use 'extend'."""
+        md = MethodDef("host.get", "host_get", "d", read_only=True,
+                        params=[ParamDef("output", "str", "d")],
+                        compact_fields=("hostid", "host", "name", "status"))
+        result = _build_zabbix_params(md, {}, compact_output=False)
+        self.assertEqual(result["output"], "extend")
+
+    def test_compact_output_explicit_extend_override(self):
+        """LLM explicitly passing 'extend' overrides compact mode."""
+        md = MethodDef("host.get", "host_get", "d", read_only=True,
+                        params=[ParamDef("output", "str", "d")],
+                        compact_fields=("hostid", "host", "name", "status"))
+        result = _build_zabbix_params(md, {"output": "extend"}, compact_output=True)
+        self.assertEqual(result["output"], "extend")
+
+    def test_compact_output_explicit_fields_override(self):
+        """LLM explicitly passing field names overrides compact mode."""
+        md = MethodDef("host.get", "host_get", "d", read_only=True,
+                        params=[ParamDef("output", "str", "d")],
+                        compact_fields=("hostid", "host", "name", "status"))
+        result = _build_zabbix_params(md, {"output": "hostid,name,interfaces"}, compact_output=True)
+        self.assertEqual(result["output"], ["hostid", "name", "interfaces"])
+
+    def test_compact_output_no_compact_fields_fallback(self):
+        """Methods without compact_fields fall back to 'extend'."""
+        md = MethodDef("history.get", "history_get", "d", read_only=True,
+                        params=[ParamDef("output", "str", "d")])
+        result = _build_zabbix_params(md, {}, compact_output=True)
+        self.assertEqual(result["output"], "extend")
+
+    def test_compact_output_count_output_skips(self):
+        """countOutput should skip output entirely even with compact mode."""
+        md = MethodDef("host.get", "host_get", "d", read_only=True,
+                        params=[
+                            ParamDef("output", "str", "d"),
+                            ParamDef("countOutput", "bool", "d"),
+                        ],
+                        compact_fields=("hostid", "host", "name", "status"))
+        result = _build_zabbix_params(md, {"countOutput": True}, compact_output=True)
+        self.assertNotIn("output", result)
+
 
 class TestTimestampNormalization(unittest.TestCase):
     def test_iso_datetime(self):

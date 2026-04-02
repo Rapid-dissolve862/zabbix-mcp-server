@@ -44,3 +44,4 @@ class MethodDef:
     read_only: bool       # If True, allowed on read-only servers
     params: list[ParamDef] = field(default_factory=list)
     array_param: str | None = None  # Param to extract as plain list for array-based API methods
+    compact_fields: tuple[str, ...] | None = None  # Key fields for compact output mode

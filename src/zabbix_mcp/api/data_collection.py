@@ -56,6 +56,7 @@ _HOST_METHODS: list[MethodDef] = [
             "and graphs that define what is monitored and how."
         ),
         read_only=True,
+        compact_fields=("hostid", "host", "name", "status"),
         params=COMMON_GET_PARAMS + _HOST_GET_EXTRA,
     ),
     MethodDef(
@@ -141,6 +142,7 @@ _HOSTGROUP_METHODS: list[MethodDef] = [
             "Groups can also be used to filter when retrieving hosts, items, triggers, etc."
         ),
         read_only=True,
+        compact_fields=("groupid", "name"),
         params=COMMON_GET_PARAMS + _HOSTGROUP_GET_EXTRA,
     ),
     MethodDef(
@@ -218,6 +220,7 @@ _HOSTINTERFACE_METHODS: list[MethodDef] = [
             "specific interfaces."
         ),
         read_only=True,
+        compact_fields=("interfaceid", "hostid", "type", "ip", "port", "main"),
         params=COMMON_GET_PARAMS + _HOSTINTERFACE_GET_EXTRA,
     ),
     MethodDef(
@@ -304,6 +307,7 @@ _ITEM_METHODS: list[MethodDef] = [
             "keys to define alerting conditions."
         ),
         read_only=True,
+        compact_fields=("itemid", "hostid", "name", "key_", "status", "value_type"),
         params=COMMON_GET_PARAMS + _ITEM_GET_EXTRA,
     ),
     MethodDef(
@@ -374,6 +378,7 @@ _TRIGGER_METHODS: list[MethodDef] = [
             "events when their state changes."
         ),
         read_only=True,
+        compact_fields=("triggerid", "description", "priority", "status", "value"),
         params=COMMON_GET_PARAMS + _TRIGGER_GET_EXTRA,
     ),
     MethodDef(
@@ -428,6 +433,7 @@ _GRAPH_METHODS: list[MethodDef] = [
             "Graphs belong to hosts or templates."
         ),
         read_only=True,
+        compact_fields=("graphid", "name"),
         params=COMMON_GET_PARAMS + _GRAPH_GET_EXTRA,
     ),
     MethodDef(
@@ -474,6 +480,7 @@ _GRAPHITEM_METHODS: list[MethodDef] = [
             "sort order, and Y-axis side."
         ),
         read_only=True,
+        compact_fields=("gitemid", "graphid", "itemid", "color"),
         params=COMMON_GET_PARAMS + _GRAPHITEM_GET_EXTRA,
     ),
 ]
@@ -502,6 +509,7 @@ _TEMPLATE_METHODS: list[MethodDef] = [
             "belong to template groups and can be nested (linked to other templates)."
         ),
         read_only=True,
+        compact_fields=("templateid", "host", "name"),
         params=COMMON_GET_PARAMS + _TEMPLATE_GET_EXTRA,
     ),
     MethodDef(
@@ -572,6 +580,7 @@ _TEMPLATEGROUP_METHODS: list[MethodDef] = [
             "host groups organize hosts. They are used for access control and logical grouping."
         ),
         read_only=True,
+        compact_fields=("groupid", "name"),
         params=COMMON_GET_PARAMS + _TEMPLATEGROUP_GET_EXTRA,
     ),
     MethodDef(
@@ -651,6 +660,7 @@ _DISCOVERYRULE_METHODS: list[MethodDef] = [
             "return JSON describing the discovered entities."
         ),
         read_only=True,
+        compact_fields=("itemid", "hostid", "name", "key_", "status"),
         params=COMMON_GET_PARAMS + _DISCOVERYRULE_GET_EXTRA,
     ),
     MethodDef(
@@ -702,6 +712,7 @@ _ITEMPROTOTYPE_METHODS: list[MethodDef] = [
             "an item prototype to create disk space items for each discovered mount point."
         ),
         read_only=True,
+        compact_fields=("itemid", "hostid", "name", "key_", "status", "value_type"),
         params=COMMON_GET_PARAMS + _ITEMPROTOTYPE_GET_EXTRA,
     ),
     MethodDef(
@@ -754,6 +765,7 @@ _TRIGGERPROTOTYPE_METHODS: list[MethodDef] = [
             "and use LLD macros."
         ),
         read_only=True,
+        compact_fields=("triggerid", "description", "priority", "status"),
         params=COMMON_GET_PARAMS + _TRIGGERPROTOTYPE_GET_EXTRA,
     ),
     MethodDef(
@@ -806,6 +818,7 @@ _GRAPHPROTOTYPE_METHODS: list[MethodDef] = [
             "real graphs for each discovered entity, visualizing data from item prototypes."
         ),
         read_only=True,
+        compact_fields=("graphid", "name"),
         params=COMMON_GET_PARAMS + _GRAPHPROTOTYPE_GET_EXTRA,
     ),
     MethodDef(
@@ -851,6 +864,7 @@ _HOSTPROTOTYPE_METHODS: list[MethodDef] = [
             "Each host prototype defines the groups, templates, and interfaces for the discovered hosts."
         ),
         read_only=True,
+        compact_fields=("hostid", "host", "name", "status"),
         params=COMMON_GET_PARAMS + _HOSTPROTOTYPE_GET_EXTRA,
     ),
     MethodDef(
@@ -897,6 +911,7 @@ _DISCOVERYRULEPROTOTYPE_METHODS: list[MethodDef] = [
             "multi-level (nested) discovery."
         ),
         read_only=True,
+        compact_fields=("itemid", "hostid", "name", "key_", "status"),
         params=COMMON_GET_PARAMS + _DISCOVERYRULEPROTOTYPE_GET_EXTRA,
     ),
     MethodDef(
@@ -946,6 +961,7 @@ _USERMACRO_METHODS: list[MethodDef] = [
             "Host-level macros override global macros of the same name."
         ),
         read_only=True,
+        compact_fields=("hostmacroid", "hostid", "macro", "value"),
         params=COMMON_GET_PARAMS + _USERMACRO_GET_EXTRA,
     ),
     MethodDef(
@@ -1035,6 +1051,7 @@ _VALUEMAP_METHODS: list[MethodDef] = [
             "and referenced by items for display purposes."
         ),
         read_only=True,
+        compact_fields=("valuemapid", "name"),
         params=COMMON_GET_PARAMS + _VALUEMAP_GET_EXTRA,
     ),
     MethodDef(
@@ -1082,6 +1099,7 @@ _MAINTENANCE_METHODS: list[MethodDef] = [
             "scheduled downtime (e.g., patching windows)."
         ),
         read_only=True,
+        compact_fields=("maintenanceid", "name", "active_since", "active_till"),
         params=COMMON_GET_PARAMS + _MAINTENANCE_GET_EXTRA,
     ),
     MethodDef(
@@ -1128,6 +1146,7 @@ _CORRELATION_METHODS: list[MethodDef] = [
             "problems when a 'service up' event is received."
         ),
         read_only=True,
+        compact_fields=("correlationid", "name", "status"),
         params=COMMON_GET_PARAMS + _CORRELATION_GET_EXTRA,
     ),
     MethodDef(
@@ -1173,6 +1192,7 @@ _DRULE_METHODS: list[MethodDef] = [
             "network. Discovered hosts and services are stored as dhost/dservice objects."
         ),
         read_only=True,
+        compact_fields=("druleid", "name", "status"),
         params=COMMON_GET_PARAMS + _DRULE_GET_EXTRA,
     ),
     MethodDef(
@@ -1221,6 +1241,7 @@ _DCHECK_METHODS: list[MethodDef] = [
             "Each discovery rule contains one or more checks."
         ),
         read_only=True,
+        compact_fields=("dcheckid", "druleid", "type"),
         params=COMMON_GET_PARAMS + _DCHECK_GET_EXTRA,
     ),
 ]
@@ -1243,6 +1264,7 @@ _DHOST_METHODS: list[MethodDef] = [
             "(dservice) representing the checks that succeeded."
         ),
         read_only=True,
+        compact_fields=("dhostid", "druleid", "status"),
         params=COMMON_GET_PARAMS + _DHOST_GET_EXTRA,
     ),
 ]
@@ -1266,6 +1288,7 @@ _DSERVICE_METHODS: list[MethodDef] = [
             "discovered hosts (dhost) and are created by network discovery rules (drule)."
         ),
         read_only=True,
+        compact_fields=("dserviceid", "dhostid", "type", "status"),
         params=COMMON_GET_PARAMS + _DSERVICE_GET_EXTRA,
     ),
 ]
@@ -1291,6 +1314,7 @@ _HTTPTEST_METHODS: list[MethodDef] = [
             "on the host."
         ),
         read_only=True,
+        compact_fields=("httptestid", "hostid", "name", "status"),
         params=COMMON_GET_PARAMS + _HTTPTEST_GET_EXTRA,
     ),
     MethodDef(

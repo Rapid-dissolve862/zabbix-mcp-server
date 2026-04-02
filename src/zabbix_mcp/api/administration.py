@@ -100,6 +100,7 @@ _ICONMAP_METHODS: list[MethodDef] = [
             "selectMappings to include the mapping rules in the response."
         ),
         read_only=True,
+        compact_fields=("iconmapid", "name"),
         params=COMMON_GET_PARAMS + _ICONMAP_GET_EXTRA,
     ),
     MethodDef(
@@ -161,6 +162,7 @@ _IMAGE_METHODS: list[MethodDef] = [
             "if you only need metadata."
         ),
         read_only=True,
+        compact_fields=("imageid", "name", "imagetype"),
         params=COMMON_GET_PARAMS + _IMAGE_GET_EXTRA,
     ),
     MethodDef(
@@ -256,6 +258,7 @@ _REGEXP_METHODS: list[MethodDef] = [
             "etc.). Use selectExpressions to include the test expressions."
         ),
         read_only=True,
+        compact_fields=("regexpid", "name"),
         params=COMMON_GET_PARAMS + _REGEXP_GET_EXTRA,
     ),
     MethodDef(
@@ -318,6 +321,7 @@ _MODULE_METHODS: list[MethodDef] = [
             "about its ID, relative path, and configuration."
         ),
         read_only=True,
+        compact_fields=("moduleid", "relative_path", "status"),
         params=COMMON_GET_PARAMS + _MODULE_GET_EXTRA,
     ),
     MethodDef(
@@ -379,6 +383,7 @@ _CONNECTOR_METHODS: list[MethodDef] = [
             "for which events to forward."
         ),
         read_only=True,
+        compact_fields=("connectorid", "name", "status"),
         params=COMMON_GET_PARAMS + _CONNECTOR_GET_EXTRA,
     ),
     MethodDef(
@@ -459,6 +464,7 @@ _AUDITLOG_METHODS: list[MethodDef] = [
             "-- always use limit or time filters."
         ),
         read_only=True,
+        compact_fields=("auditid", "userid", "action", "resourcetype", "clock"),
         params=COMMON_GET_PARAMS + _AUDITLOG_GET_EXTRA,
     ),
 ]
@@ -526,6 +532,7 @@ _PROXY_METHODS: list[MethodDef] = [
             "are actively monitoring hosts."
         ),
         read_only=True,
+        compact_fields=("proxyid", "name", "operating_mode", "state"),
         params=COMMON_GET_PARAMS + _PROXY_GET_EXTRA,
     ),
     MethodDef(
@@ -593,6 +600,7 @@ _PROXYGROUP_METHODS: list[MethodDef] = [
             "unavailable. Use selectProxies to include the group's member proxies."
         ),
         read_only=True,
+        compact_fields=("proxy_groupid", "name", "state"),
         params=COMMON_GET_PARAMS + _PROXYGROUP_GET_EXTRA,
     ),
     MethodDef(
@@ -656,6 +664,7 @@ _MFA_METHODS: list[MethodDef] = [
             "methods are available and their configuration."
         ),
         read_only=True,
+        compact_fields=("mfaid", "name", "type"),
         params=COMMON_GET_PARAMS + _MFA_GET_EXTRA,
     ),
     MethodDef(

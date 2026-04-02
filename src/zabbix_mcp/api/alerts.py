@@ -77,6 +77,7 @@ _ACTION_METHODS: list[MethodDef] = [
             "include the full operation definitions."
         ),
         read_only=True,
+        compact_fields=("actionid", "name", "status", "eventsource"),
         params=COMMON_GET_PARAMS + _ACTION_GET_EXTRA,
     ),
     MethodDef(
@@ -163,6 +164,7 @@ _ALERT_METHODS: list[MethodDef] = [
             "time window. Great for diagnosing 'why didn't I get notified?' issues."
         ),
         read_only=True,
+        compact_fields=("alertid", "actionid", "mediatypeid", "status", "clock"),
         params=COMMON_GET_PARAMS + _ALERT_GET_EXTRA,
     ),
 ]
@@ -191,6 +193,7 @@ _MEDIATYPE_METHODS: list[MethodDef] = [
             "delivery configuration."
         ),
         read_only=True,
+        compact_fields=("mediatypeid", "name", "type", "status"),
         params=COMMON_GET_PARAMS + _MEDIATYPE_GET_EXTRA,
     ),
     MethodDef(
@@ -266,6 +269,7 @@ _SCRIPT_METHODS: list[MethodDef] = [
             "for specific targets."
         ),
         read_only=True,
+        compact_fields=("scriptid", "name", "type", "scope"),
         params=COMMON_GET_PARAMS + _SCRIPT_GET_EXTRA,
     ),
     MethodDef(

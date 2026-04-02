@@ -64,6 +64,7 @@ class ServerConfig:
     cors_origins: list[str] | None = None
     allowed_import_dirs: list[str] | None = None
     allowed_hosts: list[str] | None = None
+    compact_output: bool = True
 
 
 @dataclass(frozen=True)
@@ -218,6 +219,10 @@ def load_config(path: str | Path) -> AppConfig:
 
     log_file = server_raw.get("log_file")
 
+    compact_output_raw = server_raw.get("compact_output", True)
+    if not isinstance(compact_output_raw, bool):
+        raise ConfigError("'compact_output' must be a boolean (true or false)")
+
     server_config = ServerConfig(
         transport=transport,
         host=server_raw.get("host", "127.0.0.1"),
@@ -233,6 +238,7 @@ def load_config(path: str | Path) -> AppConfig:
         cors_origins=cors_origins,
         allowed_import_dirs=allowed_import_dirs,
         allowed_hosts=allowed_hosts,
+        compact_output=compact_output_raw,
     )
 
     zabbix_raw = raw.get("zabbix", {})

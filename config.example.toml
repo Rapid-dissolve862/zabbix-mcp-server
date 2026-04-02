@@ -71,6 +71,14 @@ log_file = "/var/log/zabbix-mcp/server.log"
 # Default: 300.
 rate_limit = 300
 
+# Compact output mode for get methods (default: true).
+# When enabled, get methods return only key fields (e.g. hostid, name, status)
+# instead of all fields, reducing token usage in LLM conversations.
+# The LLM can always override this by explicitly passing output = "extend"
+# or specific field names in any get call.
+# Set to false to always return all fields (pre-1.13 behavior).
+compact_output = true
+
 # ---------------------------------------------------------------------------
 # TLS / HTTPS
 # ---------------------------------------------------------------------------

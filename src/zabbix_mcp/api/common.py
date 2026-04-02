@@ -23,9 +23,9 @@ from zabbix_mcp.api.types import ParamDef
 COMMON_GET_PARAMS: list[ParamDef] = [
     ParamDef(
         "output", "str",
-        "Fields to return: 'extend' for all fields (default), 'count' for count only, "
-        "or comma-separated field names (e.g. 'hostid,name,status'). "
-        "Defaults to 'extend' if omitted.",
+        "Fields to return. By default, returns a compact set of key fields for overview. "
+        "Pass 'extend' to get all available fields, 'count' for count only, "
+        "or comma-separated field names (e.g. 'hostid,name,status') for a custom selection.",
     ),
     ParamDef(
         "filter", "dict",
