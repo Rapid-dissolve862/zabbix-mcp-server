@@ -354,7 +354,7 @@ All available options with detailed descriptions are in [`config.example.toml`](
 <tr><td><code>host</code></td><td>HTTP bind address — <code>127.0.0.1</code> (localhost only) or <code>0.0.0.0</code> (all interfaces)</td></tr>
 <tr><td><code>port</code></td><td>HTTP port, 1–65535 (default: <code>8080</code>)</td></tr>
 <tr><td><code>log_level</code></td><td><code>debug</code>, <code>info</code>, <code>warning</code>, <code>error</code>, or <code>critical</code></td></tr>
-<tr><td><code>log_file</code></td><td>Path to log file — must be under <code>/var/log</code>, <code>/tmp</code>, or home directory</td></tr>
+<tr><td><code>log_file</code></td><td>Path to log file (parent directory must exist)</td></tr>
 <tr><td><code>auth_token</code></td><td>Bearer token for HTTP/SSE authentication (supports <code>${ENV_VAR}</code>)</td></tr>
 <tr><td><code>rate_limit</code></td><td>Max Zabbix API calls per minute per client (default: <code>300</code>, set to <code>0</code> to disable)</td></tr>
 <tr><td><code>tools</code></td><td>Filter exposed tools by category or prefix — e.g. <code>["monitoring", "alerts"]</code> (default: all ~220 tools)</td></tr>

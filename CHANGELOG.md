@@ -7,6 +7,7 @@
 - **`zabbix_raw_api_call` switched from write-suffix blacklist to read-only whitelist** — previously, the raw API call tool blocked write operations by matching a hardcoded list of write suffixes (`.create`, `.update`, `.delete`, etc.); any new Zabbix API method with an unlisted suffix would bypass `read_only` enforcement; now uses a two-layer whitelist: first checks against known read-only methods from tool definitions (`ALL_METHODS`), then falls back to a conservative suffix whitelist (`.get`, `.export`, etc.); unknown methods are blocked by default on read-only servers
 - **`source_file` symlink check reordered** — symlink detection now runs before `Path.resolve()` to prevent following symlinks before rejecting them
 - **Config validation hardened** — `log_level`, `port` (1–65535), Zabbix server `url` (must start with `http://` or `https://`), and empty `api_token` after env var resolution are now validated at config load time instead of failing at runtime
+- **Removed `log_file` path restriction** — the previous `/var/log`, `/tmp`, home directory limitation was unnecessarily restrictive; administrators can now log to any writable path
 
 ### Fixed
 

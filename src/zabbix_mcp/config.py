@@ -216,19 +216,7 @@ def load_config(path: str | Path) -> AppConfig:
             raise ConfigError("'allowed_hosts' must be a list of IP addresses or CIDR ranges")
         allowed_hosts = [str(h) for h in allowed_hosts_raw]
 
-    # Log file path validation
     log_file = server_raw.get("log_file")
-    if log_file:
-        log_file_path = Path(log_file).resolve()
-        _ALLOWED_LOG_PARENTS = (
-            Path("/var/log"),
-            Path("/tmp"),
-            Path.home(),
-        )
-        if not any(log_file_path.is_relative_to(p) for p in _ALLOWED_LOG_PARENTS):
-            raise ConfigError(
-                f"log_file '{log_file}' must be under /var/log, /tmp, or the user's home directory"
-            )
 
     server_config = ServerConfig(
         transport=transport,
