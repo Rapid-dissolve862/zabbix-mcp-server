@@ -1305,7 +1305,7 @@ def run_server(
                 "Adjust in config.toml: %s", ", ".join(warnings),
             )
         else:
-            logger.warning("  All security features are properly configured.")
+            logger.info("  All security features are properly configured.")
         logger.warning("-----------------------")
 
     mcp = FastMCP(
