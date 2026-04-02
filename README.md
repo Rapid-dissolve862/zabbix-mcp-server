@@ -288,13 +288,13 @@ The MCP client configuration is the same for all clients:
 }
 ```
 
-Where to put this config depends on the client:
+Where to put this config depends on the client. **Claude Code is recommended** — it handles large tool sets (225 tools) without issues, unlike some clients that struggle with high tool counts.
 
 | Client | Config location | Free tier |
 |---|---|---|
+| **Claude Code** (recommended) | `.mcp.json` in project root or `~/.claude/settings.json` for global | — |
 | Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows) | Yes |
 | VS Code + GitHub Copilot | `.vscode/mcp.json` in workspace | Yes |
-| Claude Code | `.mcp.json` in project root or `~/.claude/settings.json` for global | — |
 | ChatGPT (initMAX widget) | MCP server settings in the widget configuration | — |
 | OpenAI Codex | MCP server settings in the Codex configuration | — |
 | Cursor | MCP server settings in Cursor IDE | Yes |
