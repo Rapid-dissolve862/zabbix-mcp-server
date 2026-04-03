@@ -559,6 +559,9 @@ do_install() {
     echo "    MCP endpoint:  http://localhost:$active_port/mcp"
     echo "    Health check:  http://localhost:$active_port/health"
     echo
+    echo "  Changelog: https://github.com/initMAX/zabbix-mcp-server/blob/main/CHANGELOG.md"
+    echo "  (new features, security fixes, new config options)"
+    echo
     echo "  Note: This git repository ($SCRIPT_DIR) is not required"
     echo "  for the server to run — it can be moved or removed."
     echo "  To upgrade later, clone the repo again and run:"
@@ -633,6 +636,9 @@ do_update() {
 
     echo
     ok "=== Update complete ==="
+    echo
+    echo "  Changelog: https://github.com/initMAX/zabbix-mcp-server/blob/main/CHANGELOG.md"
+    echo "  (new features, security fixes, new config options)"
     echo
 }
 
