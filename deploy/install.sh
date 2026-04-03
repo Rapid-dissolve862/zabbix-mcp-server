@@ -559,8 +559,12 @@ do_install() {
     echo "    MCP endpoint:  http://localhost:$active_port/mcp"
     echo "    Health check:  http://localhost:$active_port/health"
     echo
-    echo "  Changelog: https://github.com/initMAX/zabbix-mcp-server/blob/main/CHANGELOG.md"
+    echo "  Changelog:    https://github.com/initMAX/zabbix-mcp-server/blob/main/CHANGELOG.md"
     echo "  (new features, security fixes, new config options)"
+    echo
+    echo "  Feedback:     https://github.com/initMAX/zabbix-mcp-server/issues"
+    echo "  Discussions:  https://github.com/initMAX/zabbix-mcp-server/discussions"
+    echo "  We appreciate bug reports, feature requests, and community feedback!"
     echo
     echo "  Note: This git repository ($SCRIPT_DIR) is not required"
     echo "  for the server to run — it can be moved or removed."
@@ -637,8 +641,12 @@ do_update() {
     echo
     ok "=== Update complete ==="
     echo
-    echo "  Changelog: https://github.com/initMAX/zabbix-mcp-server/blob/main/CHANGELOG.md"
+    echo "  Changelog:    https://github.com/initMAX/zabbix-mcp-server/blob/main/CHANGELOG.md"
     echo "  (new features, security fixes, new config options)"
+    echo
+    echo "  Feedback:     https://github.com/initMAX/zabbix-mcp-server/issues"
+    echo "  Discussions:  https://github.com/initMAX/zabbix-mcp-server/discussions"
+    echo "  We appreciate bug reports, feature requests, and community feedback!"
     echo
 }
 
