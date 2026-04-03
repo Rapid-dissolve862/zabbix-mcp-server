@@ -632,9 +632,39 @@ do_update() {
     # Pull latest code if we're in a git repo
     if [[ -d "$SCRIPT_DIR/.git" ]]; then
         local pull_output
-        pull_output=$(git -C "$SCRIPT_DIR" pull --ff-only 2>&1) && \
-            ok "Git pull: $pull_output" || \
-            warn "Git pull skipped — local changes or no network. Continuing with current version."
+        pull_output=$(git -C "$SCRIPT_DIR" pull --ff-only 2>&1)
+        if [[ $? -eq 0 ]]; then
+            ok "Git pull: $pull_output"
+        else
+            warn "Git pull failed (local changes, diverged branch, or no network)."
+            echo
+            echo -e "  \e[1;33mWould you like to re-clone the repository?\e[0m"
+            echo "  This will remove $SCRIPT_DIR and clone a fresh copy."
+            echo
+            if [[ -t 0 ]]; then
+                read -rp "  Re-clone? [y/N] " answer
+                if [[ "$answer" =~ ^[Yy]$ ]]; then
+                    local git_url
+                    git_url=$(git -C "$SCRIPT_DIR" remote get-url origin 2>/dev/null || echo "https://github.com/initMAX/zabbix-mcp-server.git")
+                    local parent_dir
+                    parent_dir=$(dirname "$SCRIPT_DIR")
+                    local dir_name
+                    dir_name=$(basename "$SCRIPT_DIR")
+                    info "Re-cloning from $git_url..."
+                    rm -rf "$SCRIPT_DIR"
+                    if git clone "$git_url" "$SCRIPT_DIR" 2>&1; then
+                        ok "Repository re-cloned successfully."
+                    else
+                        error "Re-clone failed! Aborting update."
+                        exit 1
+                    fi
+                else
+                    warn "Continuing with current local version."
+                fi
+            else
+                warn "Non-interactive — continuing with current local version."
+            fi
+        fi
     fi
 
     # Show current version
