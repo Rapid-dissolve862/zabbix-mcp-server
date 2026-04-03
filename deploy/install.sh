@@ -344,7 +344,7 @@ check_health() {
     while [[ $attempt -le $max_attempts ]]; do
         sleep 2
         if curl -sf --max-time 3 "$url" &>/dev/null; then
-            ok "Health check passed: $url → OK (attempt $attempt/$max_attempts)"
+            ok "Health check passed: $url → OK"
             return
         fi
         warn "Health check attempt $attempt/$max_attempts failed — retrying..."
