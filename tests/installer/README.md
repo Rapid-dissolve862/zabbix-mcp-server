@@ -18,8 +18,14 @@ cd tests/installer
 | Dockerfile | OS | System Python | Expected result |
 |---|---|---|---|
 | `Dockerfile.rhel8` | Rocky Linux 8 | python3.9 | Installer rejects — prints install hint |
+| `Dockerfile.alma8` | AlmaLinux 8 | python3.9 | Installer rejects — prints install hint |
+| `Dockerfile.oracle8` | Oracle Linux 8 | python3.9 | Installer rejects — prints install hint |
 | `Dockerfile.rhel9` | Rocky Linux 9 | python3.11 | Full install succeeds |
+| `Dockerfile.alma9` | AlmaLinux 9 | python3.11 | Full install succeeds |
+| `Dockerfile.oracle9` | Oracle Linux 9 | python3.11 | Full install succeeds |
 | `Dockerfile.rhel10` | Rocky Linux 10 | python3.12 | Full install succeeds |
+| `Dockerfile.alma10` | AlmaLinux 10 | python3.12 | Full install succeeds |
+| `Dockerfile.oracle10` | Oracle Linux 10 | python3.12 | Full install succeeds |
 | `Dockerfile.ubuntu22` | Ubuntu 22.04 | python3.10 | Full install succeeds |
 | `Dockerfile.ubuntu24` | Ubuntu 24.04 | python3.12 | Full install succeeds |
 | `Dockerfile.debian12` | Debian 12 | python3.11 | Full install succeeds |

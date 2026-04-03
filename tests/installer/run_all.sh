@@ -19,9 +19,15 @@ YELLOW='\e[1;33m'
 RESET='\e[0m'
 
 IMAGES=(
-    "Dockerfile.rhel8:RHEL 8 (python3.9 only — expect rejection)"
-    "Dockerfile.rhel9:RHEL 9 (python3.11)"
-    "Dockerfile.rhel10:RHEL 10 (python3.12)"
+    "Dockerfile.rhel8:RHEL 8 / Rocky 8 (python3.9 only — expect rejection)"
+    "Dockerfile.alma8:AlmaLinux 8 (python3.9 only — expect rejection)"
+    "Dockerfile.oracle8:Oracle Linux 8 (python3.9 only — expect rejection)"
+    "Dockerfile.rhel9:RHEL 9 / Rocky 9 (python3.11)"
+    "Dockerfile.alma9:AlmaLinux 9 (python3.11)"
+    "Dockerfile.oracle9:Oracle Linux 9 (python3.11)"
+    "Dockerfile.rhel10:RHEL 10 / Rocky 10 (python3.12)"
+    "Dockerfile.alma10:AlmaLinux 10 (python3.12)"
+    "Dockerfile.oracle10:Oracle Linux 10 (python3.12)"
     "Dockerfile.ubuntu22:Ubuntu 22.04 (python3.10)"
     "Dockerfile.ubuntu24:Ubuntu 24.04 (python3.12)"
     "Dockerfile.debian12:Debian 12 (python3.11)"
