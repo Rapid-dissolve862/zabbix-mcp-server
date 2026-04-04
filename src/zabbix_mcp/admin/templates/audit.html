@@ -7,27 +7,27 @@
         <h1 class="page-title">Audit Log</h1>
         <p class="page-subtitle">Track all admin and API activity</p>
     </div>
-    <a href="/admin/audit/export?format=csv" class="btn btn-ghost">&#x1F4E5; Export CSV</a>
+    <a href="/audit/export?format=csv" class="btn btn-ghost">&#x1F4E5; Export CSV</a>
 </div>
 
 <!-- Filters -->
 <div class="filters">
     <input type="date" id="filter-from" name="date_from" class="form-input" placeholder="From"
            value="{{ filters.date_from | default('') }}"
-           hx-get="/admin/audit"
+           hx-get="/audit"
            hx-trigger="change"
            hx-target="#audit-table"
            hx-include="[name='date_to'], [name='action'], [name='search']"
            hx-swap="innerHTML">
     <input type="date" id="filter-to" name="date_to" class="form-input" placeholder="To"
            value="{{ filters.date_to | default('') }}"
-           hx-get="/admin/audit"
+           hx-get="/audit"
            hx-trigger="change"
            hx-target="#audit-table"
            hx-include="[name='date_from'], [name='action'], [name='search']"
            hx-swap="innerHTML">
     <select name="action" class="form-select"
-            hx-get="/admin/audit"
+            hx-get="/audit"
             hx-trigger="change"
             hx-target="#audit-table"
             hx-include="[name='date_from'], [name='date_to'], [name='search']"
@@ -45,7 +45,7 @@
     </select>
     <input type="search" name="search" class="form-input search-input" placeholder="Search user, target, details..."
            value="{{ filters.search | default('') }}"
-           hx-get="/admin/audit"
+           hx-get="/audit"
            hx-trigger="keyup changed delay:300ms"
            hx-target="#audit-table"
            hx-include="[name='date_from'], [name='date_to'], [name='action']"
@@ -103,7 +103,7 @@
 {% if has_more %}
 <div class="load-more">
     <button class="btn btn-ghost"
-            hx-get="/admin/audit?offset={{ offset }}&limit=50"
+            hx-get="/audit?offset={{ offset }}&limit=50"
             hx-target="#audit-table"
             hx-swap="beforeend"
             hx-include="[name='date_from'], [name='date_to'], [name='action'], [name='search']">

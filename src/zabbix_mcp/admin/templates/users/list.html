@@ -7,7 +7,7 @@
         <h1 class="page-title">Users</h1>
         <p class="page-subtitle">Manage admin portal user accounts</p>
     </div>
-    <a href="/admin/users/create" class="btn btn-primary">&#x2B; Create User</a>
+    <a href="/users/create" class="btn btn-primary">&#x2B; Create User</a>
 </div>
 
 <div class="table-container">
@@ -37,10 +37,10 @@
                 <td class="text-sm text-muted">{{ user.last_login or 'Never' }}</td>
                 <td>
                     <div class="actions">
-                        <a href="/admin/users/{{ user.id }}" class="btn btn-ghost btn-sm">Edit</a>
+                        <a href="/users/{{ user.id }}" class="btn btn-ghost btn-sm">Edit</a>
                         {% if user.username != current_user %}
                         <button class="btn btn-danger btn-sm"
-                                hx-delete="/admin/users/{{ user.id }}"
+                                hx-delete="/users/{{ user.id }}"
                                 hx-target="#user-{{ user.id }}"
                                 hx-swap="outerHTML swap:0.3s"
                                 hx-confirm="Are you sure you want to delete user {{ user.username }}?">Delete</button>
@@ -55,7 +55,7 @@
                     <div class="empty-state">
                         <div class="empty-state-icon">&#x1F465;</div>
                         <div class="empty-state-text">No users found</div>
-                        <a href="/admin/users/create" class="btn btn-primary">Create first user</a>
+                        <a href="/users/create" class="btn btn-primary">Create first user</a>
                     </div>
                 </td>
             </tr>

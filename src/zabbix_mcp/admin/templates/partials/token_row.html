@@ -1,6 +1,6 @@
 <tr id="token-{{ token.id }}">
     <td>
-        <a href="/admin/tokens/{{ token.id }}" class="text-primary" style="font-weight:500;">{{ token.name }}</a>
+        <a href="/tokens/{{ token.id }}" class="text-primary" style="font-weight:500;">{{ token.name }}</a>
     </td>
     <td>
         <span class="copy-group">
@@ -37,17 +37,17 @@
         <div class="actions">
             {% if token.revoked %}
             <button class="btn btn-ghost btn-sm"
-                    hx-post="/admin/tokens/{{ token.id }}/activate"
+                    hx-post="/tokens/{{ token.id }}/activate"
                     hx-target="#token-{{ token.id }}"
                     hx-swap="outerHTML">Activate</button>
             {% else %}
             <button class="btn btn-ghost btn-sm"
-                    hx-post="/admin/tokens/{{ token.id }}/revoke"
+                    hx-post="/tokens/{{ token.id }}/revoke"
                     hx-target="#token-{{ token.id }}"
                     hx-swap="outerHTML">Revoke</button>
             {% endif %}
             <button class="btn btn-danger btn-sm"
-                    hx-delete="/admin/tokens/{{ token.id }}"
+                    hx-delete="/tokens/{{ token.id }}"
                     hx-target="#token-{{ token.id }}"
                     hx-swap="outerHTML swap:0.3s"
                     hx-confirm="Delete token {{ token.name }}?">Delete</button>

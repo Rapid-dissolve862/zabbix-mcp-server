@@ -7,7 +7,7 @@
         <h1 class="page-title">Create MCP Token</h1>
         <p class="page-subtitle">Generate a new API token for MCP client access</p>
     </div>
-    <a href="/admin/tokens" class="btn btn-ghost">&larr; Back to Tokens</a>
+    <a href="/tokens" class="btn btn-ghost">&larr; Back to Tokens</a>
 </div>
 
 {% if created_token %}
@@ -20,11 +20,11 @@
     <div class="token-value">{{ created_token }}</div>
     <div class="token-warning">&#x26A0; This token will not be shown again. Copy it now and store it securely.</div>
 </div>
-<a href="/admin/tokens" class="btn btn-primary">Done</a>
+<a href="/tokens" class="btn btn-primary">Done</a>
 
 {% else %}
 <div class="card" style="max-width:640px;">
-    <form method="post" action="/admin/tokens/create">
+    <form method="post" action="/tokens/create">
         <div class="form-group">
             <label class="form-label" for="name">Token Name</label>
             <input type="text" id="name" name="name" class="form-input" placeholder="e.g. Claude Desktop - Production" required>
@@ -95,7 +95,7 @@
 
         <div style="margin-top:24px; display:flex; gap:8px;">
             <button type="submit" class="btn btn-primary">Create Token</button>
-            <a href="/admin/tokens" class="btn btn-ghost">Cancel</a>
+            <a href="/tokens" class="btn btn-ghost">Cancel</a>
         </div>
     </form>
 </div>

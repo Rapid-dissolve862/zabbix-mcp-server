@@ -7,7 +7,7 @@
         <h1 class="page-title">MCP Tokens</h1>
         <p class="page-subtitle">Manage API tokens for MCP client access</p>
     </div>
-    <a href="/admin/tokens/create" class="btn btn-primary">&#x2B; Create Token</a>
+    <a href="/tokens/create" class="btn btn-primary">&#x2B; Create Token</a>
 </div>
 
 <div class="table-container">
@@ -29,7 +29,7 @@
             {% for token in tokens %}
             <tr id="token-{{ token.id }}">
                 <td>
-                    <a href="/admin/tokens/{{ token.id }}" class="text-primary" style="font-weight:500;">{{ token.name }}</a>
+                    <a href="/tokens/{{ token.id }}" class="text-primary" style="font-weight:500;">{{ token.name }}</a>
                 </td>
                 <td>
                     <span class="copy-group">
@@ -68,12 +68,12 @@
                     <div class="actions">
                         {% if token.revoked %}
                         <button class="btn btn-ghost btn-sm"
-                                hx-post="/admin/tokens/{{ token.id }}/activate"
+                                hx-post="/tokens/{{ token.id }}/activate"
                                 hx-target="#token-{{ token.id }}"
                                 hx-swap="outerHTML">Activate</button>
                         {% else %}
                         <button class="btn btn-ghost btn-sm"
-                                hx-post="/admin/tokens/{{ token.id }}/revoke"
+                                hx-post="/tokens/{{ token.id }}/revoke"
                                 hx-target="#token-{{ token.id }}"
                                 hx-swap="outerHTML">Revoke</button>
                         {% endif %}
@@ -94,7 +94,7 @@
                             <div class="modal-footer">
                                 <button class="btn btn-ghost" onclick="closeModal('delete-modal-{{ token.id }}')">Cancel</button>
                                 <button class="btn btn-danger"
-                                        hx-delete="/admin/tokens/{{ token.id }}"
+                                        hx-delete="/tokens/{{ token.id }}"
                                         hx-target="#token-{{ token.id }}"
                                         hx-swap="outerHTML swap:0.3s"
                                         onclick="closeModal('delete-modal-{{ token.id }}')">Delete</button>
@@ -110,7 +110,7 @@
                     <div class="empty-state">
                         <div class="empty-state-icon">&#x1F511;</div>
                         <div class="empty-state-text">No tokens created yet</div>
-                        <a href="/admin/tokens/create" class="btn btn-primary">Create your first token</a>
+                        <a href="/tokens/create" class="btn btn-primary">Create your first token</a>
                     </div>
                 </td>
             </tr>

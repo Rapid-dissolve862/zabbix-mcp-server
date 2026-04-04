@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Login — Zabbix MCP Admin</title>
-    <link rel="stylesheet" href="/admin/static/style.css">
+    <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
     <div class="login-page">
@@ -21,7 +21,7 @@
             <div class="login-error">{{ error }}</div>
             {% endif %}
 
-            <form method="post" action="/admin/login" autocomplete="on">
+            <form method="post" action="/login" autocomplete="on">
                 <div class="form-group">
                     <label class="form-label" for="username">Username</label>
                     <input type="text" id="username" name="username" class="form-input" placeholder="Enter username" required autofocus autocomplete="username">

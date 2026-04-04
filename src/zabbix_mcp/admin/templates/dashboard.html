@@ -48,9 +48,9 @@
 
 <!-- Quick Actions -->
 <div class="quick-actions">
-    <a href="/admin/tokens/create" class="btn btn-primary">&#x1F511; Create Token</a>
+    <a href="/tokens/create" class="btn btn-primary">&#x1F511; Create Token</a>
     <button class="btn btn-ghost"
-            hx-post="/admin/servers/test-all"
+            hx-post="/servers/test-all"
             hx-target="#connection-results"
             hx-swap="innerHTML">
         &#x1F50C; Test Connections
@@ -66,7 +66,7 @@
     </div>
     <div class="card-body">
         <div class="table-container" style="border:none;">
-            <table hx-get="/admin/audit?limit=10&partial=1"
+            <table hx-get="/audit?limit=10&partial=1"
                    hx-trigger="every 30s"
                    hx-swap="innerHTML"
                    hx-target="#recent-activity-body">

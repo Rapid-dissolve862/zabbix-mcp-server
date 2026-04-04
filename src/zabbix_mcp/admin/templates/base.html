@@ -4,8 +4,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Zabbix MCP Server{% endblock %} — Admin</title>
-    <link rel="stylesheet" href="/admin/static/style.css">
-    <script src="/admin/static/htmx.min.js"></script>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="/static/htmx.min.js"></script>
 </head>
 <body hx-indicator="#loader">
     <!-- Sidebar -->
@@ -20,19 +20,19 @@
             </div>
         </div>
         <ul class="nav-menu">
-            <li><a href="/admin/" class="nav-item {% if active == 'dashboard' %}active{% endif %}">
+            <li><a href="/" class="nav-item {% if active == 'dashboard' %}active{% endif %}">
                 <span class="nav-icon">&#x1F4CA;</span> Dashboard</a></li>
-            <li><a href="/admin/tokens" class="nav-item {% if active == 'tokens' %}active{% endif %}">
+            <li><a href="/tokens" class="nav-item {% if active == 'tokens' %}active{% endif %}">
                 <span class="nav-icon">&#x1F511;</span> MCP Tokens</a></li>
-            <li><a href="/admin/users" class="nav-item {% if active == 'users' %}active{% endif %}">
+            <li><a href="/users" class="nav-item {% if active == 'users' %}active{% endif %}">
                 <span class="nav-icon">&#x1F465;</span> Users</a></li>
-            <li><a href="/admin/servers" class="nav-item {% if active == 'servers' %}active{% endif %}">
+            <li><a href="/servers" class="nav-item {% if active == 'servers' %}active{% endif %}">
                 <span class="nav-icon">&#x1F5A5;</span> Zabbix Servers</a></li>
-            <li><a href="/admin/templates" class="nav-item {% if active == 'templates' %}active{% endif %}">
+            <li><a href="/templates" class="nav-item {% if active == 'templates' %}active{% endif %}">
                 <span class="nav-icon">&#x1F4C4;</span> Report Templates</a></li>
-            <li><a href="/admin/settings" class="nav-item {% if active == 'settings' %}active{% endif %}">
+            <li><a href="/settings" class="nav-item {% if active == 'settings' %}active{% endif %}">
                 <span class="nav-icon">&#x2699;</span> Settings</a></li>
-            <li><a href="/admin/audit" class="nav-item {% if active == 'audit' %}active{% endif %}">
+            <li><a href="/audit" class="nav-item {% if active == 'audit' %}active{% endif %}">
                 <span class="nav-icon">&#x1F4CB;</span> Audit Log</a></li>
         </ul>
         <div class="sidebar-footer">
@@ -52,7 +52,7 @@
             </button>
             <div class="user-menu">
                 <span class="user-name">{{ current_user }}</span>
-                <form method="post" action="/admin/logout" style="display:inline">
+                <form method="post" action="/logout" style="display:inline">
                     <button type="submit" class="btn btn-ghost btn-sm">Logout</button>
                 </form>
             </div>

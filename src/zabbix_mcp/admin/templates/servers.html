@@ -51,7 +51,7 @@
                 {% endif %}
             </span>
             <button class="btn btn-ghost btn-sm"
-                    hx-post="/admin/servers/{{ loop.index }}/test"
+                    hx-post="/servers/{{ loop.index }}/test"
                     hx-target="#server-status-{{ loop.index }}"
                     hx-swap="innerHTML"
                     hx-indicator="this">

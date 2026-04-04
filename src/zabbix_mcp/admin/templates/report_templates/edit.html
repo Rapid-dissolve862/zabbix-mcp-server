@@ -7,7 +7,7 @@
         <h1 class="page-title">{{ template.name if template.id else 'New Template' }}</h1>
         <p class="page-subtitle">Edit HTML report template</p>
     </div>
-    <a href="/admin/templates" class="btn btn-ghost">&larr; Back to Templates</a>
+    <a href="/templates" class="btn btn-ghost">&larr; Back to Templates</a>
 </div>
 
 {% if not template.id %}
@@ -30,7 +30,7 @@
     <div class="editor-pane">
         <div class="editor-toolbar">
             <button class="btn btn-primary btn-sm" id="save-btn"
-                    hx-post="/admin/templates/{{ template.id or 'create' }}/save"
+                    hx-post="/templates/{{ template.id or 'create' }}/save"
                     hx-include="#template-editor, #template-name, #template-desc"
                     hx-swap="none">Save</button>
             <button class="btn btn-ghost btn-sm" onclick="updatePreview()">Preview</button>
@@ -56,7 +56,7 @@
             <span class="text-sm text-muted">Preview</span>
         </div>
         <iframe class="editor-preview" id="preview-frame"
-                {% if template.id %}src="/admin/templates/{{ template.id }}/preview"{% endif %}></iframe>
+                {% if template.id %}src="/templates/{{ template.id }}/preview"{% endif %}></iframe>
     </div>
 </div>
 
