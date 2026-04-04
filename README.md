@@ -122,11 +122,13 @@ The install script will:
 
 ```bash
 cd zabbix-mcp-server
-git pull
+git fetch origin && git reset --hard origin/main
 sudo ./deploy/install.sh update
 ```
 
-The update command will upgrade the package to the latest version, refresh the systemd unit and logrotate config, check file permissions (and offer to fix any issues), and restart the service if it is running.
+The `git fetch + reset` ensures a clean sync with upstream regardless of local state or history rewrites. The update command will then upgrade the package, refresh the systemd unit and logrotate config, check file permissions (and offer to fix any issues), and restart the service if it is running.
+
+> **Note:** From v1.15+, `sudo ./deploy/install.sh update` handles git sync automatically — the explicit `git fetch + reset` is only needed when upgrading from older versions.
 
 ### Configure
 

@@ -93,11 +93,13 @@ tail -f /var/log/zabbix-mcp/server.log
 
 ```bash
 cd zabbix-mcp-server
-git pull
+git fetch origin && git reset --hard origin/main
 sudo ./deploy/install.sh update
 ```
 
-The update preserves your config, upgrades the package, refreshes the systemd unit, and restarts the service.
+The `git fetch + reset` ensures a clean sync with upstream. The update preserves your config, upgrades the package, refreshes the systemd unit, checks file permissions, and restarts the service.
+
+> **Note:** From v1.15+, `sudo ./deploy/install.sh update` handles git sync automatically — the explicit `git fetch + reset` is only needed when upgrading from older versions.
 
 ### Uninstall
 
