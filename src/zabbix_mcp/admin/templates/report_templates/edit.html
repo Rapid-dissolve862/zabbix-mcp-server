@@ -1,25 +1,26 @@
 {% extends "base.html" %}
-{% block title %}Edit Template: {{ template.name }}{% endblock %}
+{% set t = template or {} %}
+{% block title %}{% if t.id %}Edit Template: {{ t.name }}{% else %}Create Template{% endif %}{% endblock %}
 
 {% block content %}
 <div class="page-header">
     <div>
-        <h1 class="page-title">{{ template.name if template.id else 'New Template' }}</h1>
-        <p class="page-subtitle">Edit HTML report template</p>
+        <h1 class="page-title">{% if t.id %}{{ t.name }}{% else %}New Template{% endif %}</h1>
+        <p class="page-subtitle">{% if t.id %}Edit HTML report template{% else %}Create a new report template{% endif %}</p>
     </div>
     <a href="/templates" class="btn btn-ghost">&larr; Back to Templates</a>
 </div>
 
-{% if not template.id %}
+{% if not t.id %}
 <!-- Name/description for new templates -->
 <div class="card mb-4" style="max-width:640px;">
     <div class="form-group">
         <label class="form-label" for="template-name">Template Name</label>
-        <input type="text" id="template-name" name="name" class="form-input" value="{{ template.name | default('') }}" placeholder="My Report Template" required>
+        <input type="text" id="template-name" name="name" class="form-input" value="{{ t.name | default('') }}" placeholder="My Report Template" required>
     </div>
     <div class="form-group mb-0">
         <label class="form-label" for="template-desc">Description</label>
-        <input type="text" id="template-desc" name="description" class="form-input" value="{{ template.description | default('') }}" placeholder="Brief description of this template">
+        <input type="text" id="template-desc" name="description" class="form-input" value="{{ t.description | default('') }}" placeholder="Brief description of this template">
     </div>
 </div>
 {% endif %}
@@ -30,24 +31,22 @@
     <div class="editor-pane">
         <div class="editor-toolbar">
             <button class="btn btn-primary btn-sm" id="save-btn"
-                    hx-post="/templates/{{ template.id or 'create' }}/save"
+                    hx-post="/templates/{{ t.id or 'create' }}"
                     hx-include="#template-editor, #template-name, #template-desc"
                     hx-swap="none">Save</button>
             <button class="btn btn-ghost btn-sm" onclick="updatePreview()">Preview</button>
             <div style="flex:1;"></div>
             <select class="form-select" style="width:auto; min-width:160px; padding:4px 28px 4px 8px; font-size:0.82rem;" onchange="insertVariable(this.value); this.selectedIndex=0;">
                 <option value="">Insert variable...</option>
-                <option value="{{ '{{' }} host_name {{ '}}' }}">host_name</option>
-                <option value="{{ '{{' }} host_ip {{ '}}' }}">host_ip</option>
-                <option value="{{ '{{' }} problems {{ '}}' }}">problems</option>
-                <option value="{{ '{{' }} period_from {{ '}}' }}">period_from</option>
-                <option value="{{ '{{' }} period_to {{ '}}' }}">period_to</option>
-                <option value="{{ '{{' }} graphs {{ '}}' }}">graphs</option>
-                <option value="{{ '{{' }} inventory {{ '}}' }}">inventory</option>
+                <option value="{{ '{{' }} company {{ '}}' }}">company</option>
+                <option value="{{ '{{' }} period_label {{ '}}' }}">period_label</option>
+                <option value="{{ '{{' }} hosts {{ '}}' }}">hosts</option>
+                <option value="{{ '{{' }} availability_pct {{ '}}' }}">availability_pct</option>
                 <option value="{{ '{{' }} generated_at {{ '}}' }}">generated_at</option>
+                <option value="{{ '{{' }} logo_base64 {{ '}}' }}">logo_base64</option>
             </select>
         </div>
-        <textarea class="editor-textarea" id="template-editor" name="content" spellcheck="false">{{ template.content | default('<!DOCTYPE html>\n<html>\n<head>\n    <title>Report</title>\n</head>\n<body>\n    <h1>Report for {{ host_name }}</h1>\n</body>\n</html>') }}</textarea>
+        <textarea class="editor-textarea" id="template-editor" name="html_content" spellcheck="false">{{ initial_content | default('') }}</textarea>
     </div>
 
     <!-- Right: Preview -->
@@ -56,7 +55,7 @@
             <span class="text-sm text-muted">Preview</span>
         </div>
         <iframe class="editor-preview" id="preview-frame"
-                {% if template.id %}src="/templates/{{ template.id }}/preview"{% endif %}></iframe>
+                {% if t.id %}src="/templates/{{ t.id }}/preview"{% endif %}></iframe>
     </div>
 </div>
 
@@ -68,36 +67,32 @@
     </div>
     <div class="variables-body">
         <div class="variable-item">
-            <span class="variable-name">{{ '{{' }} host_name {{ '}}' }}</span>
-            <span class="variable-desc">Target host name</span>
+            <span class="variable-name">{{ '{{' }} company {{ '}}' }}</span>
+            <span class="variable-desc">Company name from config</span>
         </div>
         <div class="variable-item">
-            <span class="variable-name">{{ '{{' }} host_ip {{ '}}' }}</span>
-            <span class="variable-desc">Host IP address</span>
+            <span class="variable-name">{{ '{{' }} subtitle {{ '}}' }}</span>
+            <span class="variable-desc">Report subtitle (e.g. "IT Monitoring Service")</span>
         </div>
         <div class="variable-item">
-            <span class="variable-name">{{ '{{' }} problems {{ '}}' }}</span>
-            <span class="variable-desc">List of active problems</span>
+            <span class="variable-name">{{ '{{' }} period_label {{ '}}' }}</span>
+            <span class="variable-desc">Report period (e.g. "01/2026")</span>
         </div>
         <div class="variable-item">
-            <span class="variable-name">{{ '{{' }} period_from {{ '}}' }}</span>
-            <span class="variable-desc">Report period start</span>
+            <span class="variable-name">{{ '{{' }} hosts {{ '}}' }}</span>
+            <span class="variable-desc">List of host data objects</span>
         </div>
         <div class="variable-item">
-            <span class="variable-name">{{ '{{' }} period_to {{ '}}' }}</span>
-            <span class="variable-desc">Report period end</span>
-        </div>
-        <div class="variable-item">
-            <span class="variable-name">{{ '{{' }} graphs {{ '}}' }}</span>
-            <span class="variable-desc">Rendered graph images (base64)</span>
-        </div>
-        <div class="variable-item">
-            <span class="variable-name">{{ '{{' }} inventory {{ '}}' }}</span>
-            <span class="variable-desc">Host inventory data</span>
+            <span class="variable-name">{{ '{{' }} availability_pct {{ '}}' }}</span>
+            <span class="variable-desc">Overall availability percentage</span>
         </div>
         <div class="variable-item">
             <span class="variable-name">{{ '{{' }} generated_at {{ '}}' }}</span>
             <span class="variable-desc">Report generation timestamp</span>
+        </div>
+        <div class="variable-item">
+            <span class="variable-name">{{ '{{' }} logo_base64 {{ '}}' }}</span>
+            <span class="variable-desc">Company logo as base64 data URI</span>
         </div>
     </div>
 </div>
@@ -125,7 +120,6 @@ function insertVariable(variable) {
     textarea.focus();
 }
 
-// Keyboard shortcut: Ctrl+S to save
 document.addEventListener('keydown', function(e) {
     if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
