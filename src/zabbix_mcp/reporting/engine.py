@@ -1,0 +1,183 @@
+#
+# Zabbix MCP Server
+# Copyright (C) 2026 initMAX s.r.o.
+#
+# This program is free software: you can redistribute it and/or modify it under
+# the terms of the GNU Affero General Public License as published by the Free
+# Software Foundation, version 3.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+# details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+#
+
+"""PDF report generation engine using Jinja2 templates and weasyprint."""
+
+from __future__ import annotations
+
+import base64
+import logging
+import math
+from datetime import datetime, timezone
+from pathlib import Path
+
+logger = logging.getLogger("zabbix_mcp.reporting")
+
+try:
+    import jinja2
+    import weasyprint
+
+    REPORTING_AVAILABLE = True
+except ImportError:
+    REPORTING_AVAILABLE = False
+
+TEMPLATE_DIR = Path(__file__).parent / "templates"
+
+_ALLOWED_LOGO_EXTENSIONS = {".png", ".jpg", ".jpeg", ".svg"}
+
+_MIME_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".svg": "image/svg+xml",
+}
+
+_REPORT_TEMPLATES = {
+    "availability": "availability.html",
+    "capacity_host": "capacity_host.html",
+    "capacity_network": "capacity_network.html",
+    "backup": "backup.html",
+}
+
+
+def _compute_gauge_arc_path(percentage: float) -> str:
+    """Compute an SVG arc path for a semicircular gauge.
+
+    The gauge spans from 180 degrees (left) to 0 degrees (right) in a
+    semicircle centered at (100, 100) with radius 80.  The *percentage*
+    value (0-100) maps linearly onto this arc.
+    """
+    percentage = max(0.0, min(100.0, percentage))
+    angle_deg = 180.0 - (percentage / 100.0) * 180.0
+    angle_rad = math.radians(angle_deg)
+    end_x = 100.0 + 80.0 * math.cos(angle_rad)
+    end_y = 100.0 - 80.0 * math.sin(angle_rad)
+    large_arc = 1 if percentage > 50 else 0
+    return f"M 20 100 A 80 80 0 {large_arc} 1 {end_x:.1f} {end_y:.1f}"
+
+
+def _read_logo_as_base64(logo_path: str) -> str | None:
+    """Safely read a logo file and return a base64 data URI.
+
+    Returns ``None`` when the path is invalid, not a regular file,
+    a symbolic link, or has a disallowed extension.
+    """
+    path = Path(logo_path).resolve()
+
+    # Security: reject symlinks
+    if path.is_symlink():
+        logger.warning("Logo path is a symbolic link, rejecting: %s", logo_path)
+        return None
+
+    if not path.is_file():
+        logger.warning("Logo path is not a regular file: %s", logo_path)
+        return None
+
+    ext = path.suffix.lower()
+    if ext not in _ALLOWED_LOGO_EXTENSIONS:
+        logger.warning(
+            "Logo extension '%s' not allowed (allowed: %s)",
+            ext,
+            ", ".join(sorted(_ALLOWED_LOGO_EXTENSIONS)),
+        )
+        return None
+
+    mime = _MIME_TYPES[ext]
+    data = path.read_bytes()
+    encoded = base64.b64encode(data).decode("ascii")
+    return f"data:{mime};base64,{encoded}"
+
+
+class ReportEngine:
+    """Generate professional PDF reports from Zabbix data."""
+
+    def __init__(
+        self,
+        logo_path: str | None = None,
+        company_name: str = "",
+        subtitle: str = "IT Monitoring Service",
+    ) -> None:
+        if not REPORTING_AVAILABLE:
+            raise RuntimeError(
+                "Reporting dependencies not installed. "
+                "Install with: pip install jinja2 weasyprint"
+            )
+        self.logo_path = logo_path
+        self.company_name = company_name
+        self.subtitle = subtitle
+
+        self._env = jinja2.Environment(
+            loader=jinja2.FileSystemLoader(str(TEMPLATE_DIR)),
+            autoescape=True,
+        )
+
+    def render_pdf(self, template_name: str, context: dict) -> bytes:
+        """Render an HTML template to PDF bytes."""
+        template = self._env.get_template(template_name)
+
+        # Build common context values
+        logo_base64: str | None = None
+        if self.logo_path:
+            logo_base64 = _read_logo_as_base64(self.logo_path)
+
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+        common: dict = {
+            "logo_base64": logo_base64,
+            "company": self.company_name,
+            "subtitle": self.subtitle,
+            "generated_at": now,
+            "page_label": "Page",
+        }
+        common.update(context)
+
+        html_string = template.render(**common)
+
+        pdf_doc = weasyprint.HTML(string=html_string).write_pdf()
+        return pdf_doc
+
+    def generate_report(self, report_type: str, data: dict, **options: object) -> bytes:
+        """Generate a specific report type.
+
+        Parameters
+        ----------
+        report_type:
+            One of ``"availability"``, ``"capacity_host"``,
+            ``"capacity_network"``, ``"backup"``.
+        data:
+            Context dictionary produced by the corresponding
+            ``fetch_*`` function in :mod:`zabbix_mcp.reporting.data_fetcher`.
+        **options:
+            Extra key/value pairs merged into the template context
+            (e.g. ``company_name``).
+        """
+        template_file = _REPORT_TEMPLATES.get(report_type)
+        if template_file is None:
+            available = ", ".join(sorted(_REPORT_TEMPLATES))
+            raise ValueError(
+                f"Unknown report type '{report_type}'. Available: {available}"
+            )
+
+        context = dict(data)
+        context.update(options)
+
+        # Pre-compute derived values needed by specific templates
+        if report_type == "availability":
+            pct = context.get("availability_pct", 0.0)
+            context["gauge_arc_path"] = _compute_gauge_arc_path(pct)
+
+        return self.render_pdf(template_file, context)

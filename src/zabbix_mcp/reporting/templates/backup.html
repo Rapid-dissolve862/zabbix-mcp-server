@@ -1,0 +1,73 @@
+{#
+  Zabbix MCP Server
+  Copyright (C) 2026 initMAX s.r.o.
+
+  This program is free software: you can redistribute it and/or modify it under
+  the terms of the GNU Affero General Public License as published by the Free
+  Software Foundation, version 3.
+
+  This program is distributed in the hope that it will be useful, but WITHOUT
+  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+  FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+  details.
+
+  You should have received a copy of the GNU Affero General Public License
+  along with this program. If not, see <https://www.gnu.org/licenses/>.
+#}
+{% extends "base.html" %}
+
+{% block content %}
+<h1>{{ company }} / Backup Report / {{ period_label }}</h1>
+
+<h2>General Information</h2>
+<table class="info-table">
+    <tr>
+        <th>Company</th>
+        <td>{{ company }}</td>
+    </tr>
+    <tr>
+        <th>Report Type</th>
+        <td>Backup</td>
+    </tr>
+    <tr>
+        <th>Report Period</th>
+        <td>{{ period_label }}</td>
+    </tr>
+    <tr>
+        <th>Number of Hosts</th>
+        <td>{{ backup_matrix | length }}</td>
+    </tr>
+</table>
+
+<h2>Backup Status</h2>
+<table style="font-size: 8pt;">
+    <thead>
+        <tr>
+            <th style="min-width: 120px;">Host</th>
+            {% for day in days %}
+            <th style="text-align: center; padding: 4px 2px; min-width: 20px;">{{ day }}</th>
+            {% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for entry in backup_matrix %}
+        <tr>
+            <td>{{ entry.host }}</td>
+            {% for day in days %}
+            <td style="text-align: center; padding: 4px 2px;">
+                {% if day in entry.statuses %}
+                    {% if entry.statuses[day] %}
+                    <span class="check">&#x2713;</span>
+                    {% else %}
+                    <span class="cross">&#x2717;</span>
+                    {% endif %}
+                {% else %}
+                <span style="color: #999;">&mdash;</span>
+                {% endif %}
+            </td>
+            {% endfor %}
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

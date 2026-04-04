@@ -1,0 +1,93 @@
+{#
+  Zabbix MCP Server
+  Copyright (C) 2026 initMAX s.r.o.
+
+  This program is free software: you can redistribute it and/or modify it under
+  the terms of the GNU Affero General Public License as published by the Free
+  Software Foundation, version 3.
+
+  This program is distributed in the hope that it will be useful, but WITHOUT
+  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+  FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+  details.
+
+  You should have received a copy of the GNU Affero General Public License
+  along with this program. If not, see <https://www.gnu.org/licenses/>.
+#}
+{% extends "base.html" %}
+
+{% block content %}
+<h1>{{ company }} / Availability Report</h1>
+
+<h2>General Information</h2>
+<table class="info-table">
+    <tr>
+        <th>Company</th>
+        <td>{{ company }}</td>
+    </tr>
+    <tr>
+        <th>Report Type</th>
+        <td>Availability</td>
+    </tr>
+    <tr>
+        <th>Report Period</th>
+        <td>{{ period_from }} &mdash; {{ period_to }}</td>
+    </tr>
+    <tr>
+        <th>Service Hours</th>
+        <td>{{ service_hours | default("24x7", true) }}</td>
+    </tr>
+    <tr>
+        <th>Operational Hours</th>
+        <td>{{ operational_hours | default("24x7", true) }}</td>
+    </tr>
+</table>
+
+<h2>Overall Availability</h2>
+<div class="gauge-container">
+    <svg width="200" height="120" viewBox="0 0 200 120">
+        <!-- Background arc -->
+        <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#e0e0e0" stroke-width="12"/>
+        <!-- Value arc -->
+        {% if availability_pct > 0 %}
+        <path d="{{ gauge_arc_path }}" fill="none" stroke="#4caf50" stroke-width="12" stroke-linecap="round"/>
+        {% endif %}
+        <text x="100" y="90" text-anchor="middle" font-size="28" font-weight="600" fill="#333">{{ "%.2f"|format(availability_pct) }}%</text>
+        <text x="20" y="115" font-size="10" fill="#666">0</text>
+        <text x="95" y="18" font-size="10" fill="#666">50</text>
+        <text x="170" y="115" font-size="10" fill="#666">100</text>
+    </svg>
+</div>
+
+<h2>Summary</h2>
+<div style="text-align: center; margin: 20px 0;">
+    <div class="metric-box">
+        <div class="metric-value">{{ hosts | length }}</div>
+        <div class="metric-label">Hosts</div>
+    </div>
+    <div class="metric-box">
+        <div class="metric-value">{{ total_events }}</div>
+        <div class="metric-label">Events</div>
+    </div>
+</div>
+
+<h2>Host Availability</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Host</th>
+            <th>Event Count</th>
+            <th>Average Availability</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for host in hosts %}
+        <tr>
+            <td>{{ host.name }}</td>
+            <td>{{ host.event_count }}</td>
+            <td>{{ "%.2f"|format(host.availability_pct) }}%</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
