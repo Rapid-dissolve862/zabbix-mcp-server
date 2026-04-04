@@ -288,6 +288,34 @@ tail -f /var/log/zabbix-mcp/server.log
 sudo journalctl -u zabbix-mcp-server -f
 ```
 
+### Admin Portal
+
+Web-based administration portal for managing MCP tokens, users, report templates, and server settings. Runs on a separate port (default: 9090).
+
+```toml
+[admin]
+enabled = true
+port = 9090
+```
+
+The installer generates an admin password automatically. To reset: `sudo ./deploy/install.sh set-admin-password`
+
+**Features:**
+
+| Feature | Description |
+|---|---|
+| MCP Tokens | Create, revoke, scope control (per tool group), IP restrictions, expiry |
+| Users | Admin / operator / viewer roles for portal access |
+| Zabbix Servers | Connection status, version, test connection button |
+| Report Templates | Built-in + custom templates, split-view HTML editor with live preview |
+| Settings | All config.toml sections editable via UI (restart-required items marked) |
+| Audit Log | All admin actions logged, filterable, CSV export |
+| Design | initMAX branded, dark/light mode (auto-detect), Rubik font |
+
+Changes made in the portal are written back to `config.toml` (preserving comments). Non-restart settings apply via hot-reload.
+
+> **Security:** Admin portal shares host and TLS certificates with the MCP server. Only the port is separate — firewall it independently.
+
 ### Docker
 
 ```bash

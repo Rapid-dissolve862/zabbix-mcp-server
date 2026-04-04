@@ -10,7 +10,12 @@
 - **Capacity forecast** — new `capacity_forecast` tool uses linear regression on historical trend data to predict when a metric will reach a threshold; returns predicted date, daily growth rate, and R-squared confidence; useful for disk/CPU/memory capacity planning
 - **MCP Resources** — Zabbix data exposed as browsable MCP resources (`zabbix://{server}/hosts`, `/problems`, `/hostgroups`, `/templates`); MCP clients can browse Zabbix like a filesystem
 - **Action approval flow** — new `action_prepare` + `action_confirm` two-step pattern for write operations; `action_prepare` returns a preview and confirmation token (expires in 5 minutes); `action_confirm` executes the action only with a valid token; provides a safety layer for destructive operations
-- **Startup success banner** — clear `#### Zabbix MCP Server started successfully ####` log message after all initialization is complete
+- **Startup success banner** — clear `#### Zabbix MCP Server started successfully ####` log message after all initialization is complete; initMAX branding in startup log
+- **Installer `set-admin-password` command** — interactive admin password reset: `sudo ./deploy/install.sh set-admin-password`
+
+### Fixed
+
+- **Installer did not upgrade package on update** — `pip install` without `--upgrade` skipped re-installation when the package name was unchanged; version upgrades (e.g. 1.14→1.16) silently kept the old version
 - **Admin web portal** — full-featured web administration interface on a separate port (default: 9090); initMAX-branded design with dark/light mode (auto-detect + manual toggle), Rubik font, sidebar navigation; pages: dashboard (server status, token stats, audit feed), MCP token management (CRUD with scope picker, IP restrictions, expiry), admin user management (admin/operator/viewer roles), Zabbix server status (connection test), report template editor (split-view HTML editor with live preview), settings (all config.toml sections editable), audit log viewer with CSV export
 - **Multi-token MCP authentication** — replace single `auth_token` with multiple named tokens, each with independent scopes (tool group filtering), read-only flag, IP whitelist, and expiry; tokens stored as SHA-256 hashes in config.toml `[tokens.*]` sections; legacy `auth_token` automatically migrated; managed via admin portal or manual config edit
 - **Admin user management** — multiple admin portal users with role-based access control: admin (full access), operator (manage tokens and templates), viewer (read-only dashboard); passwords hashed with scrypt
