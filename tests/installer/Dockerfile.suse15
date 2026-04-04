@@ -1,7 +1,7 @@
 # openSUSE Leap 15 — python3.6 default, python3.11 available
 FROM opensuse/leap:15
 
-RUN zypper --non-interactive install python311 python311-pip && zypper clean
+RUN zypper --non-interactive install python311 python311-pip shadow && zypper clean
 
 COPY . /opt/src
 WORKDIR /opt/src

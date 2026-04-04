@@ -637,10 +637,14 @@ do_install() {
     # Find suitable Python
     find_python
 
-    # Service user
+    # Service user + group
     if ! id "$SERVICE_USER" &>/dev/null; then
         info "Creating system user '$SERVICE_USER'..."
-        useradd --system --shell /usr/sbin/nologin --home-dir "$INSTALL_DIR" "$SERVICE_USER"
+        if ! getent group "$SERVICE_USER" &>/dev/null; then
+            groupadd --system "$SERVICE_USER"
+        fi
+        useradd --system --shell /usr/sbin/nologin --home-dir "$INSTALL_DIR" \
+            --gid "$SERVICE_USER" "$SERVICE_USER"
     fi
 
     # Directories
