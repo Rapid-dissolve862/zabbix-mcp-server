@@ -7,6 +7,8 @@
 - **Systemd log file permission conflict** — the systemd unit used `StandardOutput=append:` which created `/var/log/zabbix-mcp/server.log` as `root:root` before dropping privileges; when the Python application then tried to open the same file via `FileHandler`, it failed with `PermissionError`; removed `StandardOutput` / `StandardError` append directives from the systemd unit — the application now manages log file writing directly via the `log_file` config option; startup errors (before logging init) go to the systemd journal (`journalctl -u zabbix-mcp-server`)
 - **Installer did not pre-create log file** — `do_install()` created and chowned `/var/log/zabbix-mcp/` but never touched `server.log` itself; if systemd or another root process created the file first, it would be owned by `root:root`; the installer now pre-creates `server.log` with correct `zabbix-mcp:zabbix-mcp` ownership
 - **Update did not fix file permissions** — `do_update()` never checked or repaired ownership on the log directory, log file, or config file; if a previous install failed mid-way (e.g. Python not found) or files were created by root, permissions stayed broken across upgrades
+- **Update failed on diverged git history** — `git pull --ff-only` failed when upstream history was rewritten or local commits existed; now falls back to `git fetch + reset --hard origin/main` automatically; after any source update, the installer re-executes itself (`exec`) to ensure the new version's code runs the update logic
+- **Update failed without git** — installer now gracefully skips git operations when `git` is not installed or when the source directory has no `.git/` (e.g. downloaded as ZIP archive)
 
 ### Added
 
