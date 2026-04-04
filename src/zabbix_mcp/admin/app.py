@@ -108,17 +108,7 @@ class AdminApp:
         ]
 
         app = Starlette(routes=routes)
-
-        # Inject admin_app reference into request state via middleware
-        original_app = app.app
-
-        async def inject_admin(scope: dict, receive: Any, send: Any) -> None:
-            if scope["type"] in ("http", "websocket"):
-                scope.setdefault("state", {})
-                scope["state"]["admin_app"] = self
-            await original_app(scope, receive, send)
-
-        app.app = inject_admin
+        app.state.admin_app = self
         return app
 
     def render(self, template_name: str, request: Request, context: dict | None = None, status_code: int = 200) -> HTMLResponse:
@@ -163,7 +153,7 @@ class AdminApp:
         if request.method == "GET":
             # Already logged in?
             if self._get_session(request):
-                return RedirectResponse("/admin/", status_code=303)
+                return RedirectResponse("/", status_code=303)
             return self.render("login.html", request)
 
         # POST — process login
@@ -208,7 +198,7 @@ class AdminApp:
         session_token = self.sessions.create_session(username, role, client_ip)
         logger.info("Admin login: user '%s' from %s (role: %s)", username, client_ip, role)
 
-        response = RedirectResponse("/admin/", status_code=303)
+        response = RedirectResponse("/", status_code=303)
         response.set_cookie(
             "admin_session",
             session_token,
@@ -223,6 +213,6 @@ class AdminApp:
         token = request.cookies.get("admin_session")
         if token:
             self.sessions.destroy_session(token)
-        response = RedirectResponse("/admin/login", status_code=303)
+        response = RedirectResponse("/login", status_code=303)
         response.delete_cookie("admin_session")
         return response

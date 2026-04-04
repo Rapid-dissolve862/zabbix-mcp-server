@@ -65,10 +65,10 @@ def _get_custom_templates(config_path: str) -> list[dict]:
 
 
 async def template_list(request: Request) -> Response:
-    admin_app = request.state.admin_app
+    admin_app = request.app.state.admin_app
     session = admin_app.require_auth(request)
     if not session:
-        return RedirectResponse("/admin/login", status_code=303)
+        return RedirectResponse("/login", status_code=303)
 
     builtin = _get_builtin_templates()
     custom = _get_custom_templates(admin_app.config_path)
@@ -82,10 +82,10 @@ async def template_list(request: Request) -> Response:
 
 
 async def template_create(request: Request) -> Response:
-    admin_app = request.state.admin_app
+    admin_app = request.app.state.admin_app
     session = admin_app.require_auth(request)
     if not session or session.role == "viewer":
-        return RedirectResponse("/admin/templates", status_code=303)
+        return RedirectResponse("/templates", status_code=303)
 
     if request.method == "GET":
         # Check if duplicating a built-in
@@ -139,14 +139,14 @@ async def template_create(request: Request) -> Response:
     except Exception as e:
         logger.error("Failed to save template config: %s", e)
 
-    return RedirectResponse("/admin/templates", status_code=303)
+    return RedirectResponse("/templates", status_code=303)
 
 
 async def template_edit(request: Request) -> Response:
-    admin_app = request.state.admin_app
+    admin_app = request.app.state.admin_app
     session = admin_app.require_auth(request)
     if not session or session.role == "viewer":
-        return RedirectResponse("/admin/templates", status_code=303)
+        return RedirectResponse("/templates", status_code=303)
 
     template_id = request.path_params["template_id"]
 
@@ -154,7 +154,7 @@ async def template_edit(request: Request) -> Response:
     custom = _get_custom_templates(admin_app.config_path)
     tmpl = next((t for t in custom if t["id"] == template_id), None)
     if not tmpl:
-        return RedirectResponse("/admin/templates", status_code=303)
+        return RedirectResponse("/templates", status_code=303)
 
     file_path = TEMPLATE_DIR / tmpl["template_file"]
     content = file_path.read_text(encoding="utf-8") if file_path.exists() else ""
@@ -182,7 +182,7 @@ async def template_edit(request: Request) -> Response:
         except Exception as e:
             logger.error("Failed to update template config: %s", e)
 
-        return RedirectResponse(f"/admin/templates/{template_id}", status_code=303)
+        return RedirectResponse(f"/templates/{template_id}", status_code=303)
 
     return admin_app.render("report_templates/edit.html", request, {
         "active": "templates",
@@ -194,7 +194,7 @@ async def template_edit(request: Request) -> Response:
 
 async def template_preview(request: Request) -> Response:
     """Render template preview with sample data."""
-    admin_app = request.state.admin_app
+    admin_app = request.app.state.admin_app
     session = admin_app.require_auth(request)
     if not session:
         return HTMLResponse("Unauthorized", status_code=401)
@@ -229,10 +229,10 @@ async def template_preview(request: Request) -> Response:
 
 
 async def template_delete(request: Request) -> Response:
-    admin_app = request.state.admin_app
+    admin_app = request.app.state.admin_app
     session = admin_app.require_auth(request)
     if not session or session.role != "admin":
-        return RedirectResponse("/admin/templates", status_code=303)
+        return RedirectResponse("/templates", status_code=303)
 
     template_id = request.path_params["template_id"]
 
@@ -253,4 +253,4 @@ async def template_delete(request: Request) -> Response:
         except Exception as e:
             logger.error("Failed to delete template: %s", e)
 
-    return RedirectResponse("/admin/templates", status_code=303)
+    return RedirectResponse("/templates", status_code=303)

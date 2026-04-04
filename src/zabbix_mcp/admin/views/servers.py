@@ -17,10 +17,10 @@ logger = logging.getLogger("zabbix_mcp.admin")
 
 
 async def servers_view(request: Request) -> Response:
-    admin_app = request.state.admin_app
+    admin_app = request.app.state.admin_app
     session = admin_app.require_auth(request)
     if not session:
-        return RedirectResponse("/admin/login", status_code=303)
+        return RedirectResponse("/login", status_code=303)
 
     client_manager = admin_app.client_manager
     servers = []
@@ -54,7 +54,7 @@ async def servers_view(request: Request) -> Response:
 
 async def server_test(request: Request) -> Response:
     """Test connection to a specific Zabbix server (HTMX endpoint)."""
-    admin_app = request.state.admin_app
+    admin_app = request.app.state.admin_app
     session = admin_app.require_auth(request)
     if not session:
         return JSONResponse({"error": "Unauthorized"}, status_code=401)

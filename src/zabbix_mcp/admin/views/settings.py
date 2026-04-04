@@ -25,10 +25,10 @@ RESTART_REQUIRED = {"host", "port", "transport", "tls_cert_file", "tls_key_file"
 
 
 async def settings_view(request: Request) -> Response:
-    admin_app = request.state.admin_app
+    admin_app = request.app.state.admin_app
     session = admin_app.require_auth(request)
     if not session:
-        return RedirectResponse("/admin/login", status_code=303)
+        return RedirectResponse("/login", status_code=303)
 
     # Read current config
     settings = {}
@@ -56,14 +56,14 @@ async def settings_view(request: Request) -> Response:
 
 
 async def settings_update(request: Request) -> Response:
-    admin_app = request.state.admin_app
+    admin_app = request.app.state.admin_app
     session = admin_app.require_auth(request)
     if not session or session.role not in ("admin", "operator"):
-        return RedirectResponse("/admin/settings", status_code=303)
+        return RedirectResponse("/settings", status_code=303)
 
     section = request.path_params["section"]
     if section not in ("server", "admin"):
-        return RedirectResponse("/admin/settings", status_code=303)
+        return RedirectResponse("/settings", status_code=303)
 
     form = await request.form()
 
@@ -104,4 +104,4 @@ async def settings_update(request: Request) -> Response:
     except Exception as e:
         logger.error("Failed to update settings: %s", e)
 
-    return RedirectResponse("/admin/settings", status_code=303)
+    return RedirectResponse("/settings", status_code=303)

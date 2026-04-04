@@ -25,10 +25,10 @@ logger = logging.getLogger("zabbix_mcp.admin")
 
 
 async def token_list(request: Request) -> Response:
-    admin_app = request.state.admin_app
+    admin_app = request.app.state.admin_app
     session = admin_app.require_auth(request)
     if not session:
-        return RedirectResponse("/admin/login", status_code=303)
+        return RedirectResponse("/login", status_code=303)
 
     tokens = admin_app.token_store.list_tokens()
     return admin_app.render("tokens/list.html", request, {
@@ -38,10 +38,10 @@ async def token_list(request: Request) -> Response:
 
 
 async def token_create(request: Request) -> Response:
-    admin_app = request.state.admin_app
+    admin_app = request.app.state.admin_app
     session = admin_app.require_auth(request)
     if not session:
-        return RedirectResponse("/admin/login", status_code=303)
+        return RedirectResponse("/login", status_code=303)
     if session.role == "viewer":
         return admin_app.render("tokens/list.html", request, {
             "active": "tokens",
@@ -118,15 +118,15 @@ async def token_create(request: Request) -> Response:
 
 
 async def token_detail(request: Request) -> Response:
-    admin_app = request.state.admin_app
+    admin_app = request.app.state.admin_app
     session = admin_app.require_auth(request)
     if not session:
-        return RedirectResponse("/admin/login", status_code=303)
+        return RedirectResponse("/login", status_code=303)
 
     token_id = request.path_params["token_id"]
     token = admin_app.token_store.get_token(token_id)
     if not token:
-        return RedirectResponse("/admin/tokens", status_code=303)
+        return RedirectResponse("/tokens", status_code=303)
 
     if request.method == "POST" and session.role != "viewer":
         form = await request.form()
@@ -166,7 +166,7 @@ async def token_detail(request: Request) -> Response:
         except Exception as e:
             logger.error("Failed to update token: %s", e)
 
-        return RedirectResponse(f"/admin/tokens/{token_id}", status_code=303)
+        return RedirectResponse(f"/tokens/{token_id}", status_code=303)
 
     return admin_app.render("tokens/detail.html", request, {
         "active": "tokens",
@@ -176,10 +176,10 @@ async def token_detail(request: Request) -> Response:
 
 
 async def token_revoke(request: Request) -> Response:
-    admin_app = request.state.admin_app
+    admin_app = request.app.state.admin_app
     session = admin_app.require_auth(request)
     if not session or session.role == "viewer":
-        return RedirectResponse("/admin/tokens", status_code=303)
+        return RedirectResponse("/tokens", status_code=303)
 
     token_id = request.path_params["token_id"]
     try:
@@ -196,14 +196,14 @@ async def token_revoke(request: Request) -> Response:
     except Exception as e:
         logger.error("Failed to revoke token: %s", e)
 
-    return RedirectResponse("/admin/tokens", status_code=303)
+    return RedirectResponse("/tokens", status_code=303)
 
 
 async def token_delete(request: Request) -> Response:
-    admin_app = request.state.admin_app
+    admin_app = request.app.state.admin_app
     session = admin_app.require_auth(request)
     if not session or session.role != "admin":
-        return RedirectResponse("/admin/tokens", status_code=303)
+        return RedirectResponse("/tokens", status_code=303)
 
     token_id = request.path_params["token_id"]
     try:
@@ -213,7 +213,7 @@ async def token_delete(request: Request) -> Response:
     except Exception as e:
         logger.error("Failed to delete token: %s", e)
 
-    return RedirectResponse("/admin/tokens", status_code=303)
+    return RedirectResponse("/tokens", status_code=303)
 
 
 def _reload_tokens(admin_app) -> None:

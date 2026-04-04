@@ -49,10 +49,10 @@ def _read_audit_entries(limit: int = 200, action_filter: str | None = None) -> l
 
 
 async def audit_view(request: Request) -> Response:
-    admin_app = request.state.admin_app
+    admin_app = request.app.state.admin_app
     session = admin_app.require_auth(request)
     if not session:
-        return RedirectResponse("/admin/login", status_code=303)
+        return RedirectResponse("/login", status_code=303)
 
     action_filter = request.query_params.get("action")
     limit = int(request.query_params.get("limit", "200"))
@@ -83,10 +83,10 @@ async def audit_view(request: Request) -> Response:
 
 async def audit_export(request: Request) -> Response:
     """Export audit log as CSV."""
-    admin_app = request.state.admin_app
+    admin_app = request.app.state.admin_app
     session = admin_app.require_auth(request)
     if not session:
-        return RedirectResponse("/admin/login", status_code=303)
+        return RedirectResponse("/login", status_code=303)
 
     entries = _read_audit_entries(limit=10000)
 

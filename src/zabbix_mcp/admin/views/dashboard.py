@@ -21,10 +21,10 @@ AUDIT_LOG_PATH = Path("/var/log/zabbix-mcp/audit.log")
 
 
 async def dashboard(request: Request) -> Response:
-    admin_app = request.state.admin_app
+    admin_app = request.app.state.admin_app
     session = admin_app.require_auth(request)
     if not session:
-        return RedirectResponse("/admin/login", status_code=303)
+        return RedirectResponse("/login", status_code=303)
 
     # Gather stats
     token_store = admin_app.token_store
@@ -67,9 +67,12 @@ async def dashboard(request: Request) -> Response:
 
     return admin_app.render("dashboard.html", request, {
         "active": "dashboard",
-        "active_tokens": active_tokens,
-        "total_tokens": len(tokens),
+        "stats": {
+            "active_tokens": active_tokens,
+            "total_tokens": len(tokens),
+            "server_count": len(servers),
+            "online_servers": sum(1 for s in servers if s["status"] == "online"),
+        },
         "servers": servers,
         "recent_audit": recent_audit[:10],
-        "server_count": len(servers),
     })

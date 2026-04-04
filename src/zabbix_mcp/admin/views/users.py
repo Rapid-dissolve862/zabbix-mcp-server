@@ -38,10 +38,10 @@ def _get_admin_users(config_path: str) -> dict:
 
 
 async def user_list(request: Request) -> Response:
-    admin_app = request.state.admin_app
+    admin_app = request.app.state.admin_app
     session = admin_app.require_auth(request)
     if not session:
-        return RedirectResponse("/admin/login", status_code=303)
+        return RedirectResponse("/login", status_code=303)
 
     users = _get_admin_users(admin_app.config_path)
     return admin_app.render("users/list.html", request, {
@@ -51,10 +51,10 @@ async def user_list(request: Request) -> Response:
 
 
 async def user_create(request: Request) -> Response:
-    admin_app = request.state.admin_app
+    admin_app = request.app.state.admin_app
     session = admin_app.require_auth(request)
     if not session or session.role != "admin":
-        return RedirectResponse("/admin/users", status_code=303)
+        return RedirectResponse("/users", status_code=303)
 
     if request.method == "GET":
         return admin_app.render("users/create.html", request, {
@@ -110,20 +110,20 @@ async def user_create(request: Request) -> Response:
             "error": f"Failed to save: {e}",
         })
 
-    return RedirectResponse("/admin/users", status_code=303)
+    return RedirectResponse("/users", status_code=303)
 
 
 async def user_detail(request: Request) -> Response:
-    admin_app = request.state.admin_app
+    admin_app = request.app.state.admin_app
     session = admin_app.require_auth(request)
     if not session or session.role != "admin":
-        return RedirectResponse("/admin/users", status_code=303)
+        return RedirectResponse("/users", status_code=303)
 
     username = request.path_params["username"]
     users = _get_admin_users(admin_app.config_path)
     user = users.get(username)
     if not user:
-        return RedirectResponse("/admin/users", status_code=303)
+        return RedirectResponse("/users", status_code=303)
 
     if request.method == "POST":
         form = await request.form()
@@ -145,7 +145,7 @@ async def user_detail(request: Request) -> Response:
         except Exception as e:
             logger.error("Failed to update user: %s", e)
 
-        return RedirectResponse(f"/admin/users/{username}", status_code=303)
+        return RedirectResponse(f"/users/{username}", status_code=303)
 
     return admin_app.render("users/create.html", request, {
         "active": "users",
@@ -156,16 +156,16 @@ async def user_detail(request: Request) -> Response:
 
 
 async def user_delete(request: Request) -> Response:
-    admin_app = request.state.admin_app
+    admin_app = request.app.state.admin_app
     session = admin_app.require_auth(request)
     if not session or session.role != "admin":
-        return RedirectResponse("/admin/users", status_code=303)
+        return RedirectResponse("/users", status_code=303)
 
     username = request.path_params["username"]
 
     # Prevent deleting yourself
     if username == session.user:
-        return RedirectResponse("/admin/users", status_code=303)
+        return RedirectResponse("/users", status_code=303)
 
     try:
         doc = load_config_document(admin_app.config_path)
@@ -178,4 +178,4 @@ async def user_delete(request: Request) -> Response:
     except Exception as e:
         logger.error("Failed to delete user: %s", e)
 
-    return RedirectResponse("/admin/users", status_code=303)
+    return RedirectResponse("/users", status_code=303)
