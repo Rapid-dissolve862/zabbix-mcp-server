@@ -1126,6 +1126,7 @@ def _register_tools(
     *,
     allowed_import_dirs: list[str] | None = None,
     compact_output: bool = True,
+    config: AppConfig | None = None,
 ) -> int:
     """Register Zabbix API methods as MCP tools. Returns tool count.
 
@@ -1728,6 +1729,7 @@ def run_server(
         mcp, client_manager, config.server.tools, config.server.disabled_tools,
         allowed_import_dirs=config.server.allowed_import_dirs,
         compact_output=config.server.compact_output,
+        config=config,
     )
     if config.server.tools or config.server.disabled_tools:
         parts = []
