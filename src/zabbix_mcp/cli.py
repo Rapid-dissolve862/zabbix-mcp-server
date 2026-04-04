@@ -64,6 +64,8 @@ def main() -> None:
 
     try:
         config = load_config(args.config)
+        # Store config path for admin portal and config writer
+        config._config_path = str(Path(args.config).resolve())  # type: ignore[attr-defined]
     except PermissionError:
         print(
             f"ERROR: Cannot read {args.config} (permission denied). "

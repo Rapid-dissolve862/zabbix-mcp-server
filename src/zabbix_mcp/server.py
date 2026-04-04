@@ -1557,11 +1557,38 @@ def run_server(
     # Determine URL scheme based on TLS configuration
     scheme = "https" if config.server.tls_cert_file else "http"
 
+    # Initialize token store (multi-token auth)
+    from zabbix_mcp.token_store import TokenStore, MultiTokenVerifier
+    token_store = TokenStore()
+
+    # Load tokens from [tokens.*] config sections
+    try:
+        from zabbix_mcp.admin.config_writer import load_config_document, TOMLKIT_AVAILABLE
+        if TOMLKIT_AVAILABLE:
+            config_path = getattr(config, "_config_path", None)
+            if config_path:
+                doc = load_config_document(config_path)
+                tokens_raw = doc.get("tokens", {})
+                if tokens_raw:
+                    token_store.load_from_config({k: dict(v) for k, v in tokens_raw.items()})
+                    logger.info("Loaded %d MCP tokens from config", token_store.token_count)
+    except Exception as e:
+        logger.warning("Failed to load tokens from config: %s", e)
+
+    # Legacy auth_token fallback
+    if config.server.auth_token and token_store.token_count == 0:
+        token_store.load_legacy_token(config.server.auth_token)
+        logger.info("Using legacy auth_token (migrate to [tokens] for multi-token support)")
+
     # Set up bearer token auth for HTTP transport
     auth_kwargs: dict[str, Any] = {}
-    if config.server.auth_token and transport in ("http", "sse"):
+    has_auth = token_store.token_count > 0 or config.server.auth_token
+    if has_auth and transport in ("http", "sse"):
         server_url = f"{scheme}://{host}:{port}"
-        auth_kwargs["token_verifier"] = _BearerTokenVerifier(config.server.auth_token)
+        if token_store.token_count > 0:
+            auth_kwargs["token_verifier"] = MultiTokenVerifier(token_store)
+        else:
+            auth_kwargs["token_verifier"] = _BearerTokenVerifier(config.server.auth_token)
         auth_kwargs["auth"] = AuthSettings(
             issuer_url=server_url,
             resource_server_url=server_url,
@@ -1790,6 +1817,50 @@ def run_server(
                 uvicorn_kwargs["ssl_certfile"] = config.server.tls_cert_file
                 uvicorn_kwargs["ssl_keyfile"] = config.server.tls_key_file
                 logger.info("TLS enabled (cert: %s)", config.server.tls_cert_file)
+
+            # Start admin portal on separate port (if configured)
+            admin_config = getattr(config.server, "_admin_config", None)
+            admin_enabled = False
+            config_path = getattr(config, "_config_path", None)
+
+            if config_path:
+                try:
+                    from zabbix_mcp.admin.config_writer import load_config_document, TOMLKIT_AVAILABLE
+                    if TOMLKIT_AVAILABLE:
+                        doc = load_config_document(config_path)
+                        admin_section = doc.get("admin", {})
+                        admin_enabled = admin_section.get("enabled", False)
+                except Exception:
+                    pass
+
+            if admin_enabled and config_path:
+                admin_port = admin_section.get("port", 9090)
+                admin_host = admin_section.get("host", "127.0.0.1")
+
+                from zabbix_mcp.admin.app import AdminApp
+                admin_app_instance = AdminApp(
+                    config=config,
+                    config_path=config_path,
+                    client_manager=client_manager,
+                    token_store=token_store,
+                )
+
+                # Run admin on a separate thread with its own uvicorn
+                import threading
+
+                def _run_admin():
+                    import uvicorn as admin_uvicorn
+                    admin_uvicorn.run(
+                        admin_app_instance.app,
+                        host=admin_host,
+                        port=admin_port,
+                        log_level="warning",
+                        access_log=False,
+                    )
+
+                admin_thread = threading.Thread(target=_run_admin, daemon=True)
+                admin_thread.start()
+                logger.info("Admin portal: http://%s:%d/admin/", admin_host, admin_port)
 
             logger.info("#### Zabbix MCP Server started successfully ####")
             uvicorn.run(asgi_app, **uvicorn_kwargs)
