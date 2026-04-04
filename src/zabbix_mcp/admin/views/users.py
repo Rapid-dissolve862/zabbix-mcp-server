@@ -90,12 +90,12 @@ async def user_create(request: Request) -> Response:
         })
 
     try:
+        import tomlkit
         password_hash = hash_password(password)
         # Write to [admin.users.<username>]
         doc = load_config_document(admin_app.config_path)
         admin = doc.get("admin", {})
         if "users" not in admin:
-            import tomlkit
             admin["users"] = tomlkit.table(is_super_table=True)
         user_table = tomlkit.table()
         user_table["password_hash"] = password_hash
@@ -104,7 +104,7 @@ async def user_create(request: Request) -> Response:
         save_config_document(admin_app.config_path, doc)
         logger.info("User '%s' created (role: %s) by %s", username, role, session.user)
     except Exception as e:
-        logger.error("Failed to create user: %s", e)
+        logger.exception("Failed to create user: %s", e)
         return admin_app.render("users/create.html", request, {
             "active": "users",
             "error": f"Failed to save: {e}",
