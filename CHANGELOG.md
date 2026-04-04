@@ -9,6 +9,12 @@
 - **Update did not fix file permissions** — `do_update()` never checked or repaired ownership on the log directory, log file, or config file; if a previous install failed mid-way (e.g. Python not found) or files were created by root, permissions stayed broken across upgrades
 - **Update failed on diverged git history** — `git pull --ff-only` failed when upstream history was rewritten or local commits existed; now falls back to `git fetch + reset --hard origin/main` automatically; after any source update, the installer re-executes itself (`exec`) to ensure the new version's code runs the update logic
 - **Update failed without git** — installer now gracefully skips git operations when `git` is not installed or when the source directory has no `.git/` (e.g. downloaded as ZIP archive)
+- **TOCTOU symlink race in `source_file`** — the symlink check ran before `resolve()`, allowing a race condition where an attacker could swap a file for a symlink between the check and the read; now resolves first and opens with `O_NOFOLLOW` for atomic symlink rejection
+- **Zabbix version parsing crash** — `int()` conversion of non-numeric version parts (e.g. `7.0.0alpha1`) raised `ValueError`; now falls back gracefully to 7.0
+- **CLI argument override used `or` instead of `None` check** — `--port 0` or `--host ""` were silently ignored due to falsy-value short-circuit; now uses explicit `is not None` checks
+- **Docker compose ENTRYPOINT/command conflict** — the compose `command` used `sh -c "exec python ..."` which concatenated with the Dockerfile `ENTRYPOINT`, producing invalid arguments; now passes CLI args directly to the entrypoint
+- **Docker HEALTHCHECK used system Python** — the Dockerfile `HEALTHCHECK` called bare `python` instead of the venv binary; added `ENV PATH` for the venv and switched to exec form
+- **TOML parse errors produced raw traceback** — malformed `config.toml` now raises a clean `ConfigError` with the parse error details instead of an unhandled `TOMLDecodeError`
 
 ### Added
 
@@ -23,6 +29,9 @@
 - **Installer robustness in containers** — `install_systemd_unit` and `install_logrotate` now gracefully skip when `/etc/systemd/system` or `/etc/logrotate.d` directories do not exist; `systemctl daemon-reload` is non-fatal (containers, chroots); `userdel` failure in uninstall is non-fatal with a manual fix hint
 - **Explicit group creation** — installer now runs `groupadd --system` before `useradd` to ensure the service group exists on all distributions (fixes openSUSE where `useradd` does not auto-create a matching group)
 - **Installer test coverage** — fixed Dockerfiles for AlmaLinux 10 (`shadow-utils`), Amazon Linux 2023 (`shadow-utils`), openSUSE 15 (`shadow`), RHEL 10 (switched to `almalinux:10` since `rockylinux:10` is not yet available on Docker Hub)
+- **Zabbix API version cached per server** — `get_version()` no longer makes an extra HTTP roundtrip on every tool call; version is fetched once per server connection and cached
+- **Token-based auth no longer calls `logout()` on shutdown** — eliminates spurious warning log when using API tokens (which don't have sessions to invalidate)
+- **Self-updating installer** — after pulling new code, the installer re-executes itself (`exec`) to ensure the updated version's logic runs the update; prevents stale installer code from running new package versions
 
 ## v1.14 — 2026-04-04
 
