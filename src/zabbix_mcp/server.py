@@ -18,11 +18,14 @@
 """MCP server setup, lifespan management, and dynamic tool registration."""
 
 import asyncio
+import base64
+import hashlib
 import hmac
 import inspect
 import json
 import logging
 import re
+import secrets
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -1252,6 +1255,233 @@ def _register_tools(
     )
     count += 1
 
+    # ------------------------------------------------------------------
+    # Extension tools (server-side analytics, graph export, reporting)
+    # ------------------------------------------------------------------
+    from zabbix_mcp.api.extensions import graph_render, anomaly_detect, capacity_forecast
+
+    async def _graph_render(
+        *,
+        graphid: Annotated[str, Field(description="Zabbix graph ID (numeric)")],
+        period: Annotated[Optional[str], Field(description="Time period: '1h', '6h', '1d', '7d', '30d' (default: '1h')")] = "1h",
+        width: Annotated[Optional[int], Field(description="Image width in pixels, 100-4096 (default: 800)")] = 800,
+        height: Annotated[Optional[int], Field(description="Image height in pixels, 50-2048 (default: 200)")] = 200,
+        server: Annotated[Optional[str], Field(description=server_desc)] = None,
+    ) -> str:
+        """Render a Zabbix graph as a PNG image. Returns a base64-encoded data URI
+        that multimodal AI models can display and interpret directly. Use graph_get
+        to find graph IDs first."""
+        srv = client_manager.resolve_server(server or client_manager.default_server)
+        return await asyncio.to_thread(
+            graph_render, client_manager, srv,
+            graphid=graphid, period=period, width=width, height=height,
+        )
+
+    mcp.add_tool(
+        _graph_render, name="graph_render",
+        annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True),
+    )
+    count += 1
+
+    async def _anomaly_detect(
+        *,
+        item_key: Annotated[str, Field(description="Item key pattern to analyze (e.g. 'system.cpu.util', 'vm.memory.utilization')")],
+        hostgroupid: Annotated[Optional[str], Field(description="Host group ID — analyze all hosts in this group")] = None,
+        hostid: Annotated[Optional[str], Field(description="Single host ID — compare against group baseline")] = None,
+        period: Annotated[Optional[str], Field(description="Analysis period: '1d', '7d', '30d' (default: '7d')")] = "7d",
+        threshold: Annotated[Optional[float], Field(description="Z-score threshold for anomaly (default: 2.0 = 2 standard deviations)")] = 2.0,
+        server: Annotated[Optional[str], Field(description=server_desc)] = None,
+    ) -> str:
+        """Detect anomalous hosts by comparing metric values across a host group.
+        Uses z-score analysis on trend data to find hosts that deviate significantly
+        from the group average. Requires at least 2 hosts with data."""
+        srv = client_manager.resolve_server(server or client_manager.default_server)
+        return await asyncio.to_thread(
+            anomaly_detect, client_manager, srv,
+            item_key=item_key, hostgroupid=hostgroupid, hostid=hostid,
+            period=period, threshold=threshold,
+        )
+
+    mcp.add_tool(
+        _anomaly_detect, name="anomaly_detect",
+        annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True),
+    )
+    count += 1
+
+    async def _capacity_forecast(
+        *,
+        hostid: Annotated[str, Field(description="Host ID to analyze")],
+        item_key: Annotated[str, Field(description="Item key to forecast (e.g. 'vfs.fs.size[/,pused]', 'system.cpu.util')")],
+        threshold: Annotated[Optional[float], Field(description="Value threshold to predict when reached (default: 90.0)")] = 90.0,
+        period: Annotated[Optional[str], Field(description="Historical period for regression: '7d', '30d', '90d' (default: '30d')")] = "30d",
+        server: Annotated[Optional[str], Field(description=server_desc)] = None,
+    ) -> str:
+        """Forecast when a metric will reach a threshold using linear regression
+        on historical trend data. Returns predicted date, daily growth rate,
+        and R-squared confidence. Useful for capacity planning (disk, CPU, memory)."""
+        srv = client_manager.resolve_server(server or client_manager.default_server)
+        return await asyncio.to_thread(
+            capacity_forecast, client_manager, srv,
+            hostid=hostid, item_key=item_key, threshold=threshold, period=period,
+        )
+
+    mcp.add_tool(
+        _capacity_forecast, name="capacity_forecast",
+        annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True),
+    )
+    count += 1
+
+    # ------------------------------------------------------------------
+    # PDF Report generation (optional — requires weasyprint + jinja2)
+    # ------------------------------------------------------------------
+    try:
+        from zabbix_mcp.reporting.engine import ReportEngine, REPORTING_AVAILABLE
+        if REPORTING_AVAILABLE:
+            report_engine = ReportEngine(
+                logo_path=getattr(config.server, "report_logo", None),
+                company_name=getattr(config.server, "report_company", ""),
+                subtitle=getattr(config.server, "report_subtitle", "IT Monitoring Service"),
+            )
+
+            async def _report_generate(
+                *,
+                report_type: Annotated[str, Field(description="Report type: 'availability', 'capacity_host', 'capacity_network', 'backup'")],
+                hostgroupid: Annotated[str, Field(description="Host group ID to include in the report")],
+                period: Annotated[Optional[str], Field(description="Report period: '7d', '30d', '90d' (default: '30d')")] = "30d",
+                company: Annotated[Optional[str], Field(description="Company name for report header (overrides config)")] = None,
+                server: Annotated[Optional[str], Field(description=server_desc)] = None,
+            ) -> str:
+                """Generate a PDF report from Zabbix monitoring data. Returns the report
+                as a base64-encoded PDF data URI. Supported report types: availability
+                (SLA/uptime), capacity_host (CPU/memory/disk), capacity_network
+                (bandwidth/traffic), backup (daily success/fail matrix)."""
+                from zabbix_mcp.reporting import data_fetcher
+                srv = client_manager.resolve_server(server or client_manager.default_server)
+
+                valid_types = ("availability", "capacity_host", "capacity_network", "backup")
+                if report_type not in valid_types:
+                    return json.dumps({"error": f"Invalid report_type. Must be one of: {', '.join(valid_types)}"})
+
+                try:
+                    fetcher = getattr(data_fetcher, f"fetch_{report_type}_data")
+                    context = await asyncio.to_thread(
+                        fetcher, client_manager, srv,
+                        {"hostgroupid": hostgroupid, "period": period, "company": company or report_engine.company_name},
+                    )
+                    pdf_bytes = await asyncio.to_thread(
+                        report_engine.render_pdf, report_type, context,
+                    )
+                    encoded = base64.b64encode(pdf_bytes).decode("ascii")
+                    return json.dumps({
+                        "report": f"data:application/pdf;base64,{encoded}",
+                        "report_type": report_type,
+                        "pages": len(pdf_bytes) // 3000 + 1,  # rough estimate
+                        "size_kb": round(len(pdf_bytes) / 1024, 1),
+                    })
+                except Exception as exc:
+                    logger.exception("Report generation failed for type '%s'", report_type)
+                    return json.dumps({"error": f"Report generation failed: {exc}"})
+
+            mcp.add_tool(
+                _report_generate, name="report_generate",
+                annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True),
+            )
+            count += 1
+            logger.info("PDF reporting enabled (report_generate tool registered)")
+        else:
+            logger.info("PDF reporting disabled (install 'weasyprint' and 'jinja2' to enable)")
+    except ImportError:
+        logger.info("PDF reporting disabled (reporting module not found)")
+
+    # ------------------------------------------------------------------
+    # Action approval flow (two-step prepare + confirm)
+    # ------------------------------------------------------------------
+    _pending_actions: dict[str, dict[str, Any]] = {}  # token -> action details
+
+    async def action_prepare(
+        *,
+        action: Annotated[str, Field(description="Zabbix API method to execute (e.g. 'maintenance.create', 'host.massupdate')")],
+        params: Annotated[dict, Field(description="API method parameters as JSON object")],
+        server: Annotated[Optional[str], Field(description=server_desc)] = None,
+    ) -> str:
+        """Prepare a write action for review before execution. Returns a preview
+        of what will happen and a confirmation token. Use action_confirm with the
+        token to actually execute it. Tokens expire after 5 minutes."""
+        srv = client_manager.resolve_server(server or client_manager.default_server)
+        try:
+            client_manager.check_write(srv)
+        except ReadOnlyError as e:
+            return json.dumps({"error": str(e)})
+
+        # Generate secure token
+        token = secrets.token_urlsafe(32)
+        expires = time.time() + 300  # 5 minutes
+
+        # Cleanup expired tokens
+        now = time.time()
+        expired = [t for t, v in _pending_actions.items() if v["expires"] < now]
+        for t in expired:
+            del _pending_actions[t]
+
+        _pending_actions[token] = {
+            "action": action,
+            "params": params,
+            "server": srv,
+            "expires": expires,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+        return json.dumps({
+            "status": "pending_confirmation",
+            "confirmation_token": token,
+            "action": action,
+            "server": srv,
+            "params_preview": {k: v for k, v in params.items() if k != "password"},
+            "expires_in_seconds": 300,
+            "message": "Review the action above. Call action_confirm with the token to execute.",
+        }, indent=2)
+
+    mcp.add_tool(
+        action_prepare, name="action_prepare",
+        annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+    )
+    count += 1
+
+    async def action_confirm(
+        *,
+        confirmation_token: Annotated[str, Field(description="Token from action_prepare response")],
+    ) -> str:
+        """Execute a previously prepared action. The confirmation token must match
+        an active (non-expired) prepared action."""
+        if confirmation_token not in _pending_actions:
+            return json.dumps({"error": "Invalid or expired confirmation token."})
+
+        action_data = _pending_actions.pop(confirmation_token)
+
+        if action_data["expires"] < time.time():
+            return json.dumps({"error": "Confirmation token has expired. Prepare the action again."})
+
+        try:
+            result = await asyncio.to_thread(
+                client_manager.call, action_data["server"],
+                action_data["action"], action_data["params"],
+            )
+            return _UNTRUSTED_PREAMBLE + json.dumps({
+                "status": "executed",
+                "action": action_data["action"],
+                "server": action_data["server"],
+                "result": result,
+            })
+        except Exception as exc:
+            logger.exception("Action execution failed: %s", action_data["action"])
+            return json.dumps({"error": f"Execution failed: {exc}", "action": action_data["action"]})
+
+    mcp.add_tool(
+        action_confirm, name="action_confirm",
+        annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=True),
+    )
+    count += 1
+
     return count
 
 
@@ -1467,6 +1697,50 @@ def run_server(
         logger.info("Registered %d tools (%s)", tool_count, "; ".join(parts))
     else:
         logger.info("Registered %d tools", tool_count)
+
+    # ------------------------------------------------------------------
+    # MCP Resources — expose Zabbix data as browsable resources
+    # ------------------------------------------------------------------
+    default_srv = client_manager.default_server
+
+    if default_srv:
+        @mcp.resource(f"zabbix://{default_srv}/hosts")
+        async def resource_hosts() -> str:
+            """List of all monitored hosts."""
+            result = await asyncio.to_thread(
+                client_manager.call, default_srv, "host.get",
+                {"output": ["hostid", "host", "name", "status"], "sortfield": "name"},
+            )
+            return json.dumps(result, indent=2)
+
+        @mcp.resource(f"zabbix://{default_srv}/problems")
+        async def resource_problems() -> str:
+            """Currently active problems."""
+            result = await asyncio.to_thread(
+                client_manager.call, default_srv, "problem.get",
+                {"output": "extend", "recent": True, "sortfield": ["eventid"], "sortorder": "DESC", "limit": 100},
+            )
+            return json.dumps(result, indent=2)
+
+        @mcp.resource(f"zabbix://{default_srv}/hostgroups")
+        async def resource_hostgroups() -> str:
+            """All host groups."""
+            result = await asyncio.to_thread(
+                client_manager.call, default_srv, "hostgroup.get",
+                {"output": ["groupid", "name"], "sortfield": "name"},
+            )
+            return json.dumps(result, indent=2)
+
+        @mcp.resource(f"zabbix://{default_srv}/templates")
+        async def resource_templates() -> str:
+            """All templates."""
+            result = await asyncio.to_thread(
+                client_manager.call, default_srv, "template.get",
+                {"output": ["templateid", "host", "name"], "sortfield": "name"},
+            )
+            return json.dumps(result, indent=2)
+
+        logger.info("Registered MCP resources (zabbix://%s/...)", default_srv)
 
     # HTTP health endpoint (unauthenticated, returns minimal info only)
     if transport in ("http", "sse"):
