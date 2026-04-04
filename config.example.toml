@@ -80,6 +80,22 @@ rate_limit = 300
 compact_output = true
 
 # ---------------------------------------------------------------------------
+# PDF Reporting (optional — requires: pip install zabbix-mcp-server[reporting])
+# ---------------------------------------------------------------------------
+# The report_generate tool creates professional PDF reports from Zabbix data.
+# Install optional dependencies to enable: pip install weasyprint jinja2
+# Or: pip install zabbix-mcp-server[reporting]
+
+# Path to company logo image (PNG, JPG, or SVG). Embedded in report header.
+# report_logo = "/etc/zabbix-mcp/logo.png"
+
+# Company name shown in report title (e.g. "ACME Corp / Availability Report").
+# report_company = ""
+
+# Subtitle shown in the report header (default: "IT Monitoring Service").
+# report_subtitle = "IT Monitoring Service"
+
+# ---------------------------------------------------------------------------
 # TLS / HTTPS
 # ---------------------------------------------------------------------------
 # Enable native TLS by providing paths to a certificate and private key.

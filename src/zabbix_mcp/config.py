@@ -65,6 +65,9 @@ class ServerConfig:
     allowed_import_dirs: list[str] | None = None
     allowed_hosts: list[str] | None = None
     compact_output: bool = True
+    report_logo: str | None = None
+    report_company: str = ""
+    report_subtitle: str = "IT Monitoring Service"
 
 
 @dataclass(frozen=True)
@@ -242,6 +245,9 @@ def load_config(path: str | Path) -> AppConfig:
         allowed_import_dirs=allowed_import_dirs,
         allowed_hosts=allowed_hosts,
         compact_output=compact_output_raw,
+        report_logo=server_raw.get("report_logo"),
+        report_company=server_raw.get("report_company", ""),
+        report_subtitle=server_raw.get("report_subtitle", "IT Monitoring Service"),
     )
 
     zabbix_raw = raw.get("zabbix", {})

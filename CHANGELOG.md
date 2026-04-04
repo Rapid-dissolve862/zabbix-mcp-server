@@ -4,7 +4,13 @@
 
 ### Added
 
-- **Startup success banner** — clear `#### Zabbix MCP Server started successfully ####` log message after all initialization is complete; makes it immediately obvious in logs whether the server started or failed
+- **Graph image export** — new `graph_render` tool fetches rendered Zabbix graph PNGs from the frontend and returns them as base64 data URIs; multimodal AI models can display and interpret the graphs directly; supports Bearer token and session cookie authentication
+- **PDF report generator** — new `report_generate` tool creates professional PDF reports from Zabbix data; 4 report types: `availability` (SLA gauge + uptime per host), `capacity_host` (CPU/memory/disk usage), `capacity_network` (bandwidth/traffic per interface), `backup` (daily success/fail matrix); configurable company logo and branding via `report_logo`, `report_company`, `report_subtitle` config options; requires optional `weasyprint` + `jinja2` dependencies (`pip install zabbix-mcp-server[reporting]`)
+- **Anomaly detection** — new `anomaly_detect` tool performs z-score analysis on trend data across a host group; identifies hosts whose metric values deviate significantly from the group average; configurable threshold and analysis period
+- **Capacity forecast** — new `capacity_forecast` tool uses linear regression on historical trend data to predict when a metric will reach a threshold; returns predicted date, daily growth rate, and R-squared confidence; useful for disk/CPU/memory capacity planning
+- **MCP Resources** — Zabbix data exposed as browsable MCP resources (`zabbix://{server}/hosts`, `/problems`, `/hostgroups`, `/templates`); MCP clients can browse Zabbix like a filesystem
+- **Action approval flow** — new `action_prepare` + `action_confirm` two-step pattern for write operations; `action_prepare` returns a preview and confirmation token (expires in 5 minutes); `action_confirm` executes the action only with a valid token; provides a safety layer for destructive operations
+- **Startup success banner** — clear `#### Zabbix MCP Server started successfully ####` log message after all initialization is complete
 
 ## v1.15 — 2026-04-04
 
