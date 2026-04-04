@@ -33,6 +33,7 @@ DEFAULT_PORT=8080
 PYTHON_BIN=""
 DRY_RUN=false
 AUTO_INSTALL_PYTHON=false
+INSTALL_REPORTING=false
 
 # --------------------------------------------------------------------------- #
 # Read port from config.toml (falls back to DEFAULT_PORT)
@@ -131,15 +132,16 @@ Commands:
 Options:
   --dry-run           Check prerequisites without installing anything
   --install-python    Automatically install Python if no suitable version found
+  --with-reporting    Install PDF reporting dependencies (weasyprint, jinja2)
   -h, --help          Show this help message
 
 Examples:
   sudo ./deploy/install.sh                       # fresh install
+  sudo ./deploy/install.sh --with-reporting      # fresh install + PDF reports
   sudo ./deploy/install.sh update                # update in place
+  sudo ./deploy/install.sh update --with-reporting  # update + enable PDF reports
   sudo ./deploy/install.sh uninstall             # complete removal
   sudo ./deploy/install.sh --dry-run             # verify prerequisites
-  sudo ./deploy/install.sh --install-python      # auto-install Python if needed
-  sudo ./deploy/install.sh install --dry-run     # dry-run for fresh install
 
 What it does:
   install:
@@ -575,9 +577,29 @@ install_package() {
     spin "Upgrading pip" "$INSTALL_DIR/venv/bin/pip" install --upgrade pip --quiet
     spin "Installing zabbix-mcp-server from ${SCRIPT_DIR}" "$INSTALL_DIR/venv/bin/pip" install "$SCRIPT_DIR" --quiet
 
+    # Install optional reporting dependencies if requested
+    if $INSTALL_REPORTING; then
+        info "Installing PDF reporting system libraries..."
+        if [[ -f /etc/redhat-release ]]; then
+            dnf install -y cairo pango gdk-pixbuf2 libffi-devel &>/dev/null || \
+                warn "Some system libraries for reporting may be missing. Install: dnf install cairo pango gdk-pixbuf2"
+        elif [[ -f /etc/debian_version ]]; then
+            apt-get install -y libcairo2 libpango-1.0-0 libgdk-pixbuf2.0-0 libffi-dev &>/dev/null || \
+                warn "Some system libraries for reporting may be missing. Install: apt-get install libcairo2 libpango-1.0-0 libgdk-pixbuf2.0-0"
+        fi
+        spin "Installing PDF reporting dependencies" "$INSTALL_DIR/venv/bin/pip" install "$SCRIPT_DIR[reporting]" --quiet
+    fi
+
     local version
     version=$("$INSTALL_DIR/venv/bin/zabbix-mcp-server" --version 2>&1 || true)
     ok "Installed: $version"
+
+    # Check if reporting is available
+    if "$INSTALL_DIR/venv/bin/python" -c "import weasyprint, jinja2" 2>/dev/null; then
+        ok "PDF reporting: enabled"
+    else
+        info "PDF reporting: disabled (install with --with-reporting to enable)"
+    fi
 }
 
 # --------------------------------------------------------------------------- #
@@ -925,6 +947,9 @@ for arg in "$@"; do
             ;;
         --install-python)
             AUTO_INSTALL_PYTHON=true
+            ;;
+        --with-reporting)
+            INSTALL_REPORTING=true
             ;;
         install|update|upgrade|uninstall)
             COMMAND="$arg"
