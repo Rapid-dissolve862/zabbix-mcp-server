@@ -60,9 +60,9 @@
             </div>
 
             <div class="form-group">
-                <label class="form-label" for="ip_allowlist">IP Allowlist</label>
+                <label class="form-label" for="ip_allowlist">Token IP Restriction</label>
                 <textarea id="ip_allowlist" name="ip_allowlist" class="form-textarea" rows="3">{{ token.allowed_ips | join('\n') if token.allowed_ips else '' }}</textarea>
-                <div class="form-hint">One IP address or CIDR range per line.</div>
+                <div class="form-hint">Per-token IP filter. Separate from global <a href="/settings">IP Allowlist</a>. One IP/CIDR per line.</div>
             </div>
 
             <div class="form-group">

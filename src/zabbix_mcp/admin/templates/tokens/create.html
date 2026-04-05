@@ -74,9 +74,9 @@
         </div>
 
         <div class="form-group">
-            <label class="form-label" for="ip_allowlist">IP Allowlist</label>
-            <textarea id="ip_allowlist" name="ip_allowlist" class="form-textarea" rows="3" placeholder="192.168.1.0/24&#10;10.0.0.1&#10;Leave empty for unrestricted access"></textarea>
-            <div class="form-hint">One IP address or CIDR range per line. Leave empty to allow all IPs.</div>
+            <label class="form-label" for="ip_allowlist">Token IP Restriction</label>
+            <textarea id="ip_allowlist" name="ip_allowlist" class="form-textarea" rows="3" placeholder="192.168.1.0/24&#10;10.0.0.1&#10;Leave empty = no restriction"></textarea>
+            <div class="form-hint">Per-token IP filter — only these IPs can authenticate with this token. This is separate from the global <a href="/settings">IP Allowlist</a> in Settings which applies to all connections. One IP/CIDR per line.</div>
         </div>
 
         <div class="form-group">
