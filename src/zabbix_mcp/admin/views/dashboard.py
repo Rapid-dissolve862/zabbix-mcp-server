@@ -55,28 +55,29 @@ async def dashboard(request: Request) -> Response:
     except Exception:
         pass
 
+    # Don't check live status here — it blocks page load
+    # Use cached version if available, otherwise show as "unknown"
     all_server_names = sorted(set(client_manager.server_names) | config_servers)
     for name in all_server_names:
         if name in client_manager.server_names:
-            srv_config = client_manager.get_server_config(name)
-            try:
-                version = client_manager.get_version(name)
+            # Use cached version (no HTTP call)
+            cached_version = client_manager._versions.get(name)
+            if cached_version:
                 status = "online"
-            except Exception:
-                version = "unknown"
-                status = "error"
+            else:
+                status = "unknown"
             # Check config drift
-            cfg = {}
-            if name in config_servers:
-                try:
+            try:
+                live_config = client_manager.get_server_config(name)
+                cfg = {}
+                if name in config_servers:
                     cfg = dict(doc2.get("zabbix", {}).get(name, {}))
-                except Exception:
-                    pass
-            if cfg.get("url") and cfg["url"] != srv_config.url:
-                status = "changed"  # config differs from live
+                if cfg.get("url") and cfg["url"] != live_config.url:
+                    status = "changed"
+            except Exception:
+                pass
             servers.append({"name": name, "status": status})
         else:
-            # In config but not live — pending restart
             servers.append({"name": name, "status": "pending"})
 
     # Count report templates

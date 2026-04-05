@@ -60,42 +60,23 @@ async def servers_view(request: Request) -> Response:
         read_only = cfg.get("read_only", live_config.read_only if live_config else True)
         verify_ssl = cfg.get("verify_ssl", live_config.verify_ssl if live_config else True)
 
-        # Status from live connection
-        status = "unknown"
-        version = None
-        error_msg = None
+        # Don't check live status here — it blocks page load.
+        # Status will be loaded async via HTMX /servers/{name}/test
         config_changed = False
-        if name in client_manager.server_names:
-            try:
-                version = client_manager.get_version(name)
-                status = "online"
-            except Exception as e:
-                status = "error"
-                error_msg = str(e)
-
-            # Detect config drift (URL changed etc.)
-            if live_config and cfg.get("url") and cfg["url"] != live_config.url:
-                restart_needed = True
-                config_changed = True
-                # Override error — the real issue is config drift, not connection failure
-                if status == "error":
-                    error_msg = None
-        else:
-            # Server in config but not in live registry
-            status = "pending"
-            error_msg = "Not loaded — restart required"
-            restart_needed = True
+        if name not in client_manager.server_names:
             config_changed = True
+            restart_needed = True
+        elif live_config and cfg.get("url") and cfg["url"] != live_config.url:
+            config_changed = True
+            restart_needed = True
 
         servers.append({
             "name": name,
             "url": url,
-            "status": status,
-            "version": version,
             "read_only": read_only,
             "verify_ssl": verify_ssl,
-            "error": error_msg,
             "config_changed": config_changed,
+            "is_live": name in client_manager.server_names,
         })
 
     # Also check if live has servers not in config (deleted)

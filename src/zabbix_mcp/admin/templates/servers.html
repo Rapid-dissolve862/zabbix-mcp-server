@@ -113,22 +113,21 @@
         <div class="server-card-url">{{ server.url }}</div>
 
         <div class="server-card-meta">
-            <span class="status-inline" id="server-status-{{ server.name }}">
+            <span class="status-inline" id="server-status-{{ server.name }}"
+                  {% if server.is_live and not server.config_changed %}
+                  hx-post="/servers/{{ server.name }}/test"
+                  hx-trigger="load"
+                  hx-swap="innerHTML"
+                  {% endif %}>
                 {% if server.config_changed %}
                 <span class="status-dot status-dot-yellow"></span> Restart required
-                {% elif server.status == "online" %}
-                <span class="status-dot status-dot-green"></span> Connected
-                {% elif server.status == "pending" %}
+                {% elif not server.is_live %}
                 <span class="status-dot status-dot-yellow"></span> Pending restart
-                {% elif server.status == "error" %}
-                <span class="status-dot status-dot-red"></span> Error
                 {% else %}
-                <span class="status-dot status-dot-yellow"></span> Unknown
+                <span class="status-dot" style="background:var(--text-muted);"></span>
+                <span class="text-muted">Checking...</span>
                 {% endif %}
             </span>
-            {% if server.version %}
-            <span>Zabbix {{ server.version }}</span>
-            {% endif %}
         </div>
 
         {% if server.error %}
