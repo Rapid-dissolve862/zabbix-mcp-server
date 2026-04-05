@@ -1777,21 +1777,26 @@ tbody tr:last-child td {
 /* ---------- Custom number input with +/- buttons ---------- */
 .number-input-group {
     display: inline-flex;
-    align-items: center;
+    align-items: stretch;
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
     overflow: hidden;
+    background: var(--bg-card);
 }
 .number-input-group input[type="number"] {
     border: none;
+    border-left: 1px solid var(--border-color);
+    border-right: 1px solid var(--border-color);
     text-align: center;
     width: 80px;
-    padding: 8px 4px;
-    background: var(--bg-input);
+    padding: 10px 4px;
+    background: var(--bg-card);
     color: var(--text-primary);
     font-family: var(--font-sans);
-    font-size: 0.9rem;
+    font-size: 0.95rem;
+    font-weight: 500;
     -moz-appearance: textfield;
+    outline: none;
 }
 .number-input-group input[type="number"]::-webkit-inner-spin-button,
 .number-input-group input[type="number"]::-webkit-outer-spin-button {
@@ -1799,21 +1804,26 @@ tbody tr:last-child td {
     margin: 0;
 }
 .number-input-group .num-btn {
-    background: var(--bg-input);
+    background: transparent;
     border: none;
-    color: var(--text-primary);
-    width: 36px;
-    height: 100%;
+    color: var(--text-secondary);
+    width: 42px;
+    padding: 10px 0;
     cursor: pointer;
-    font-size: 1.1rem;
+    font-size: 1.2rem;
+    font-weight: 300;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background 0.15s;
+    transition: all 0.15s;
+    user-select: none;
 }
 .number-input-group .num-btn:hover {
     background: var(--color-primary);
     color: white;
+}
+.number-input-group .num-btn:active {
+    transform: scale(0.92);
 }
 
 /* ---------- Flatpickr dark mode ---------- */
