@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Zabbix MCP Server{% endblock %} — Admin</title>
     <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/flatpickr.min.css">
     <script src="/static/htmx.min.js"></script>
+    <script src="/static/flatpickr.min.js"></script>
 </head>
 <body hx-indicator="#loader">
     <!-- Sidebar -->
@@ -213,6 +215,40 @@
             setTimeout(function() { btn.innerHTML = orig; }, 2000);
         });
     }
+
+    // Initialize flatpickr on all date inputs
+    document.querySelectorAll('input[type="date"]').forEach(function(el) {
+        el.type = 'text'; // Remove native picker
+        flatpickr(el, {
+            dateFormat: 'Y-m-d',
+            allowInput: true,
+            theme: document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark',
+        });
+    });
+
+    // Custom number input +/- buttons
+    function initNumberInputs() {
+        document.querySelectorAll('.number-input-group').forEach(function(group) {
+            var input = group.querySelector('input[type="number"]');
+            var minus = group.querySelector('.num-minus');
+            var plus = group.querySelector('.num-plus');
+            if (minus) minus.addEventListener('click', function() {
+                var step = parseInt(input.step) || 1;
+                var min = parseInt(input.min);
+                var val = parseInt(input.value) || 0;
+                if (isNaN(min) || val - step >= min) input.value = val - step;
+                input.dispatchEvent(new Event('change'));
+            });
+            if (plus) plus.addEventListener('click', function() {
+                var step = parseInt(input.step) || 1;
+                var max = parseInt(input.max);
+                var val = parseInt(input.value) || 0;
+                if (isNaN(max) || val + step <= max) input.value = val + step;
+                input.dispatchEvent(new Event('change'));
+            });
+        });
+    }
+    document.addEventListener('DOMContentLoaded', initNumberInputs);
 
     // Auto-dismiss toasts
     setTimeout(function() {

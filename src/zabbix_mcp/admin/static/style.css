@@ -1774,24 +1774,85 @@ tbody tr:last-child td {
     transition: width 0.3s ease;
 }
 
-/* ---------- Number input spinners (dark mode visibility) ---------- */
-input[type="number"]::-webkit-inner-spin-button,
-input[type="number"]::-webkit-outer-spin-button {
-    opacity: 1;
-    filter: invert(1);
+/* ---------- Custom number input with +/- buttons ---------- */
+.number-input-group {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    overflow: hidden;
 }
-[data-theme="light"] input[type="number"]::-webkit-inner-spin-button,
-[data-theme="light"] input[type="number"]::-webkit-outer-spin-button {
-    filter: none;
+.number-input-group input[type="number"] {
+    border: none;
+    text-align: center;
+    width: 80px;
+    padding: 8px 4px;
+    background: var(--bg-input);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 0.9rem;
+    -moz-appearance: textfield;
+}
+.number-input-group input[type="number"]::-webkit-inner-spin-button,
+.number-input-group input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+.number-input-group .num-btn {
+    background: var(--bg-input);
+    border: none;
+    color: var(--text-primary);
+    width: 36px;
+    height: 100%;
+    cursor: pointer;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+}
+.number-input-group .num-btn:hover {
+    background: var(--color-primary);
+    color: white;
 }
 
-/* ---------- Date input icon (dark mode) ---------- */
-input[type="date"]::-webkit-calendar-picker-indicator {
-    filter: invert(0.8);
+/* ---------- Flatpickr dark mode ---------- */
+:root .flatpickr-calendar {
+    background: var(--bg-card);
+    border-color: var(--border-color);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    font-family: var(--font-sans);
 }
-[data-theme="light"] input[type="date"]::-webkit-calendar-picker-indicator {
-    filter: none;
+:root .flatpickr-day {
+    color: var(--text-primary);
 }
+:root .flatpickr-day.selected {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+}
+:root .flatpickr-day:hover {
+    background: var(--bg-input);
+}
+:root .flatpickr-months .flatpickr-month,
+:root .flatpickr-current-month .flatpickr-monthDropdown-months,
+:root .flatpickr-weekdays,
+:root span.flatpickr-weekday {
+    background: var(--bg-card);
+    color: var(--text-primary);
+}
+:root .flatpickr-months .flatpickr-prev-month,
+:root .flatpickr-months .flatpickr-next-month {
+    color: var(--text-primary);
+    fill: var(--text-primary);
+}
+[data-theme="light"] .flatpickr-calendar {
+    background: #fff;
+    border-color: #e2e8f0;
+}
+[data-theme="light"] .flatpickr-day { color: #1e293b; }
+[data-theme="light"] .flatpickr-months .flatpickr-month,
+[data-theme="light"] .flatpickr-weekdays,
+[data-theme="light"] span.flatpickr-weekday { background: #fff; color: #1e293b; }
 
 /* ---------- Select dropdown arrow (dark mode) ---------- */
 .form-select {

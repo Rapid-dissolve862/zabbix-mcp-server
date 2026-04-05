@@ -33,7 +33,11 @@
                 MCP Listen Port
             </div>
             <div>
-                <input type="number" name="port" class="form-input" value="{{ settings.port | default(8080) }}" min="1" max="65535" style="width:120px;">
+                <div class="number-input-group">
+                    <button type="button" class="num-btn num-minus">&minus;</button>
+                    <input type="number" name="port" value="{{ settings.port | default(8080) }}" min="1" max="65535">
+                    <button type="button" class="num-btn num-plus">+</button>
+                </div>
                 <div class="form-hint">TCP port for the MCP protocol endpoint (<code>/mcp</code>). ⚠️ Requires restart.</div>
             </div>
         </div>
@@ -109,8 +113,16 @@
                 TLS Certificate
             </div>
             <div>
-                <input type="text" name="tls_cert_file" class="form-input" value="{{ settings.tls_cert_file | default('') }}" placeholder="/etc/ssl/certs/mcp.crt">
-                <div class="form-hint">Path to PEM certificate file. Applies to both MCP (:{{ settings.port | default(8080) }}) and admin portal (:{{ settings.admin_port | default(9090) }}). ⚠️ Requires restart.</div>
+                <div style="display:flex; gap:8px; align-items:start;">
+                    <input type="text" name="tls_cert_file" class="form-input" value="{{ settings.tls_cert_file | default('') }}" placeholder="/etc/ssl/certs/mcp.crt">
+                    {% if current_user_role == 'admin' %}
+                    <label class="btn btn-ghost btn-sm" style="cursor:pointer;">
+                        &#x1F4C1; Upload
+                        <input type="file" name="file" accept=".pem,.crt,.cert" style="display:none;" form="upload-tls-cert-form" onchange="document.getElementById('upload-tls-cert-form').submit()">
+                    </label>
+                    {% endif %}
+                </div>
+                <div class="form-hint">Path to PEM certificate file. Applies to both MCP (:{{ settings.port | default(8080) }}) and admin portal (:{{ settings.admin_port | default(9090) }}). Max 100 KB. &#x26A0;&#xFE0F; Requires restart.</div>
             </div>
         </div>
         <div class="settings-row">
@@ -118,8 +130,16 @@
                 TLS Key
             </div>
             <div>
-                <input type="text" name="tls_key_file" class="form-input" value="{{ settings.tls_key_file | default('') }}" placeholder="/etc/ssl/private/mcp.key">
-                <div class="form-hint">Path to PEM private key file. Both fields must be set to enable TLS. ⚠️ Requires restart.</div>
+                <div style="display:flex; gap:8px; align-items:start;">
+                    <input type="text" name="tls_key_file" class="form-input" value="{{ settings.tls_key_file | default('') }}" placeholder="/etc/ssl/private/mcp.key">
+                    {% if current_user_role == 'admin' %}
+                    <label class="btn btn-ghost btn-sm" style="cursor:pointer;">
+                        &#x1F4C1; Upload
+                        <input type="file" name="file" accept=".pem,.key" style="display:none;" form="upload-tls-key-form" onchange="document.getElementById('upload-tls-key-form').submit()">
+                    </label>
+                    {% endif %}
+                </div>
+                <div class="form-hint">Path to PEM private key file. Both fields must be set to enable TLS. Max 100 KB. Stored with 0600 permissions. &#x26A0;&#xFE0F; Requires restart.</div>
             </div>
         </div>
         <div class="settings-row">
@@ -147,7 +167,11 @@
             <div class="settings-label">Rate Limit</div>
             <div>
                 <div style="display:flex; align-items:center; gap:8px;">
-                    <input type="number" name="rate_limit" class="form-input" value="{{ settings.rate_limit | default(300) }}" min="0" style="width:120px;">
+                    <div class="number-input-group">
+                        <button type="button" class="num-btn num-minus">&minus;</button>
+                        <input type="number" name="rate_limit" value="{{ settings.rate_limit | default(300) }}" min="0">
+                        <button type="button" class="num-btn num-plus">+</button>
+                    </div>
                     <span class="text-muted">requests/min per token</span>
                 </div>
                 <div class="form-hint">0 = unlimited.</div>
@@ -212,8 +236,16 @@
         <div class="settings-row">
             <div class="settings-label">Report Logo</div>
             <div>
-                <input type="text" name="report_logo" class="form-input" value="{{ settings.report_logo | default('') }}" placeholder="/etc/zabbix-mcp/logo.png">
-                <div class="form-hint">Path to PNG/JPG/SVG logo for report headers. Note: logrotate does not manage this file — place it in a persistent location.</div>
+                <div style="display:flex; gap:8px; align-items:start;">
+                    <input type="text" name="report_logo" class="form-input" value="{{ settings.report_logo | default('') }}" placeholder="/etc/zabbix-mcp/logo.png" readonly>
+                    {% if current_user_role != 'viewer' %}
+                    <label class="btn btn-ghost btn-sm" style="cursor:pointer;">
+                        &#x1F4C1; Upload
+                        <input type="file" name="file" accept=".png,.jpg,.jpeg,.svg" style="display:none;" form="upload-logo-form" onchange="document.getElementById('upload-logo-form').submit()">
+                    </label>
+                    {% endif %}
+                </div>
+                <div class="form-hint">Path to PNG/JPG/SVG logo for report headers (max 5 MB). Upload or set path manually in config.toml.</div>
                 {% if settings.report_logo %}
                 <div class="text-sm" style="margin-top:4px;">
                     <span class="badge badge-success">Logo configured</span>
@@ -251,7 +283,11 @@
                 Admin Port
             </div>
             <div>
-                <input type="number" name="port" class="form-input" value="{{ settings.admin_port | default(9090) }}" min="1" max="65535" style="width:120px;">
+                <div class="number-input-group">
+                    <button type="button" class="num-btn num-minus">&minus;</button>
+                    <input type="number" name="port" value="{{ settings.admin_port | default(9090) }}" min="1" max="65535">
+                    <button type="button" class="num-btn num-plus">+</button>
+                </div>
                 <div class="form-hint">Separate port for admin UI. Shares host and TLS with MCP server. ⚠️ Requires restart.</div>
             </div>
         </div>
@@ -262,4 +298,9 @@
         {% endif %}
     </form>
 </div>
+
+<!-- Hidden upload forms (outside all section forms to avoid nesting) -->
+<form id="upload-logo-form" method="post" action="/settings/upload/logo" enctype="multipart/form-data" style="display:none;"></form>
+<form id="upload-tls-cert-form" method="post" action="/settings/upload/tls_cert" enctype="multipart/form-data" style="display:none;"></form>
+<form id="upload-tls-key-form" method="post" action="/settings/upload/tls_key" enctype="multipart/form-data" style="display:none;"></form>
 {% endblock %}

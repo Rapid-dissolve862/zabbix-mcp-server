@@ -80,6 +80,7 @@ class AdminApp:
         from zabbix_mcp.admin.views.servers import servers_view, server_create, server_edit, server_delete, server_test, server_restart, server_test_new
         from zabbix_mcp.admin.views.templates import template_list, template_create, template_edit, template_preview, template_delete
         from zabbix_mcp.admin.views.settings import settings_view, settings_update
+        from zabbix_mcp.admin.views.uploads import upload_logo, upload_tls_cert, upload_tls_key
         from zabbix_mcp.admin.views.audit import audit_view, audit_export
 
         routes = [
@@ -109,6 +110,9 @@ class AdminApp:
             Route("/templates/{template_id}/preview", template_preview, methods=["GET", "POST"]),
             Route("/templates/{template_id}/delete", template_delete, methods=["POST"]),
             Route("/settings", settings_view, methods=["GET"]),
+            Route("/settings/upload/logo", upload_logo, methods=["POST"]),
+            Route("/settings/upload/tls_cert", upload_tls_cert, methods=["POST"]),
+            Route("/settings/upload/tls_key", upload_tls_key, methods=["POST"]),
             Route("/settings/{section}", settings_update, methods=["POST"]),
             Route("/audit", audit_view),
             Route("/audit/export", audit_export),

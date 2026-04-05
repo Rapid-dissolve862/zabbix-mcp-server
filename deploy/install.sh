@@ -694,7 +694,10 @@ do_install() {
     # Directories
     info "Creating directories..."
     mkdir -p "$INSTALL_DIR" "$CONFIG_DIR" "$LOG_DIR"
+    mkdir -p "$CONFIG_DIR/assets" "$CONFIG_DIR/tls"
     chown "$SERVICE_USER:$SERVICE_USER" "$LOG_DIR"
+    chown "$SERVICE_USER:$SERVICE_USER" "$CONFIG_DIR/assets" "$CONFIG_DIR/tls"
+    chmod 750 "$CONFIG_DIR/tls"
     touch "$LOG_DIR/server.log"
     chown "$SERVICE_USER:$SERVICE_USER" "$LOG_DIR/server.log"
 

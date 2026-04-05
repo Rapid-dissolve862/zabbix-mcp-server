@@ -12,14 +12,14 @@
 
 <!-- Filters -->
 <div class="filters">
-    <input type="date" id="filter-from" name="date_from" class="form-input" placeholder="From"
+    <input type="text" id="filter-from" name="date_from" class="form-input flatpickr-date" placeholder="From"
            value="{{ filters.date_from | default('') }}"
            hx-get="/audit"
            hx-trigger="change"
            hx-target="#audit-table"
            hx-include="[name='date_to'], [name='action'], [name='search']"
            hx-swap="innerHTML">
-    <input type="date" id="filter-to" name="date_to" class="form-input" placeholder="To"
+    <input type="text" id="filter-to" name="date_to" class="form-input flatpickr-date" placeholder="To"
            value="{{ filters.date_to | default('') }}"
            hx-get="/audit"
            hx-trigger="change"

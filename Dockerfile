@@ -38,7 +38,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN useradd --system --shell /usr/sbin/nologin --home-dir /opt/zabbix-mcp zabbix-mcp \
     && mkdir -p /var/log/zabbix-mcp /etc/zabbix-mcp \
-    && chown zabbix-mcp:zabbix-mcp /var/log/zabbix-mcp /etc/zabbix-mcp
+    && mkdir -p /etc/zabbix-mcp/assets /etc/zabbix-mcp/tls \
+    && chown zabbix-mcp:zabbix-mcp /var/log/zabbix-mcp /etc/zabbix-mcp \
+    && chown zabbix-mcp:zabbix-mcp /etc/zabbix-mcp/assets /etc/zabbix-mcp/tls \
+    && chmod 750 /etc/zabbix-mcp/tls
 
 COPY --from=builder /opt/zabbix-mcp/venv /opt/zabbix-mcp/venv
 
