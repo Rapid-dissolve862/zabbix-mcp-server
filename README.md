@@ -160,13 +160,16 @@ All available options with detailed descriptions are documented in [`config.exam
 
 #### Authentication — two tokens explained
 
-The config file contains **two different tokens** that serve different purposes:
+The config file contains **two different types of tokens** that serve different purposes:
 
 ```
-┌─────────────┐    auth_token     ┌──────────────────┐    api_token     ┌────────────────┐
-│  MCP Client ├───────────────────►  MCP Server      ├──────────────────►  Zabbix Server  │
-│  (AI / IDE) │   (optional)      │  (zabbix-mcp)    │   (required)     │                │
-└─────────────┘                   └──────────────────┘                  └────────────────┘
+┌─────────────┐  MCP token (Bearer) ┌──────────────────┐   api_token      ┌────────────────┐
+│  MCP Client ├─────────────────────►  MCP Server      ├──────────────────►  Zabbix Server  │
+│  (AI / IDE) │   (optional)        │  (zabbix-mcp)    │   (required)     │                │
+└─────────────┘                     │                  │                  └────────────────┘
+                                    │  Admin Portal    │
+                                    │  :9090 (optional)│
+                                    └──────────────────┘
 ```
 
 **`api_token`** (in `[zabbix.*]`) — **required** — authenticates the MCP server to your Zabbix instance. This is a [Zabbix API token](https://www.zabbix.com/documentation/current/en/manual/web_interface/frontend_sections/users/api_tokens) that you create in the Zabbix frontend.
@@ -371,7 +374,7 @@ MCP_AUTH_TOKEN=...   # bearer token for MCP server authentication (optional)
 
 `MCP_PORT` controls both the container-internal port and the host-side binding — no need to edit `docker-compose.yml`. The `port` setting in `config.toml` is ignored when running via Docker (overridden by `MCP_PORT`).
 
-> **Security:** Docker deployments are typically exposed to the network. Set `MCP_AUTH_TOKEN` in `.env` and uncomment `auth_token = "${MCP_AUTH_TOKEN}"` in `config.toml` to require authentication.
+> **Security:** Docker deployments are typically exposed to the network. Generate an MCP token (`sudo ./deploy/install.sh generate-token <name>`) or add a `[tokens.*]` section in `config.toml` to require authentication. See [MCP Authentication](#mcp-authentication-optional) above.
 
 **Upgrade:**
 
