@@ -151,5 +151,19 @@ document.addEventListener('keydown', function(e) {
         submitTemplate();
     }
 });
+
+// Live preview — debounced auto-update while typing
+var _previewTimer = null;
+var editor = document.getElementById('template-editor');
+if (editor) {
+    editor.addEventListener('input', function() {
+        clearTimeout(_previewTimer);
+        _previewTimer = setTimeout(updatePreview, 800);
+    });
+    // Initial preview on page load
+    if (editor.value.trim()) {
+        setTimeout(updatePreview, 300);
+    }
+}
 </script>
 {% endblock %}
