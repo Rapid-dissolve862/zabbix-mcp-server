@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from pathlib import Path
 
 from zabbix_mcp import __version__
 from zabbix_mcp.config import ConfigError, load_config
@@ -64,6 +65,8 @@ def main() -> None:
 
     try:
         config = load_config(args.config)
+        # Store config path for admin portal and config writer
+        object.__setattr__(config, "_config_path", str(Path(args.config).resolve()))
     except PermissionError:
         print(
             f"ERROR: Cannot read {args.config} (permission denied). "
@@ -83,7 +86,6 @@ def main() -> None:
     # When log_file is not set, write to stderr (goes to journal under systemd).
     handlers: list[logging.Handler] = []
     if config.server.log_file:
-        from pathlib import Path
         log_path = Path(config.server.log_file)
         log_path.parent.mkdir(parents=True, exist_ok=True)
         try:
@@ -119,7 +121,7 @@ def main() -> None:
     port = args.port if args.port is not None else config.server.port
 
     server_names = ", ".join(config.zabbix_servers.keys())
-    logger.info("Starting Zabbix MCP Server v%s", __version__)
+    logger.info("Zabbix MCP Server v%s — developed by initMAX s.r.o.", __version__)
     logger.info("Transport: %s | Listening on: %s:%d", transport, host, port)
     logger.info("Zabbix servers: %s", server_names)
 

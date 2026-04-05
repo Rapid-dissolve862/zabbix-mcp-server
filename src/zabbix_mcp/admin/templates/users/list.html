@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Users{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Users</h1>
+        <p class="page-subtitle">Manage admin portal user accounts</p>
+    </div>
+    {% if current_user_role != 'viewer' %}
+    <a href="/users/create" class="btn btn-primary">&#x2B; Create User</a>
+    {% endif %}
+</div>
+
+<div class="table-container">
+    <table>
+        <thead>
+            <tr>
+                <th class="sortable">Username</th>
+                <th>Role</th>
+                <th class="sortable">Last Login</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if users %}
+            {% for username, user_data in users.items() %}
+            <tr id="user-{{ username }}">
+                <td style="font-weight:500;">{{ username }}</td>
+                <td>
+                    {% if user_data.role == 'admin' %}
+                    <span class="badge badge-danger">admin</span>
+                    {% elif user_data.role == 'operator' %}
+                    <span class="badge badge-warning">operator</span>
+                    {% else %}
+                    <span class="badge badge-muted">viewer</span>
+                    {% endif %}
+                </td>
+                <td class="text-sm text-muted"><a href="/audit?action=login_success&search={{ username }}" class="text-muted">View in audit</a></td>
+                <td>
+                    <div class="actions">
+                        <a href="/users/{{ username }}" class="btn btn-ghost btn-sm">Edit</a>
+                        {% if username != current_user %}
+                        <form method="post" action="/users/{{ username }}/delete" style="display:inline;" id="del-user-{{ username }}">
+                            <button type="button" class="btn btn-danger btn-sm"
+                                    onclick="confirmDelete('user {{ username }}', 'del-user-{{ username }}')">Delete</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+            {% else %}
+            <tr>
+                <td colspan="4">
+                    <div class="empty-state">
+                        <div class="empty-state-icon">&#x1F465;</div>
+                        <div class="empty-state-text">No users found</div>
+                        <a href="/users/create" class="btn btn-primary">Create first user</a>
+                    </div>
+                </td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

@@ -1,0 +1,501 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Settings</h1>
+        <p class="page-subtitle">Global configuration for MCP server and admin portal</p>
+    </div>
+</div>
+
+{% if has_legacy_token %}
+<div class="alert alert-warning" style="margin-bottom: 24px; padding: 12px 16px; border-radius: 8px; background: var(--color-warning-bg, rgba(255,170,0,0.1)); border: 1px solid var(--color-warning, #fa0);">
+    &#x26A0;&#xFE0F; Legacy <code>auth_token</code> detected in config. Manage authentication via <a href="/tokens">MCP Tokens</a> page.
+</div>
+{% endif %}
+
+<!-- Section 1: MCP Server -->
+<div class="settings-section">
+    <h2 class="settings-section-title">&#x1F5A5; MCP Server</h2>
+    <div class="form-hint" style="margin-bottom:12px;">&#x26A0;&#xFE0F; All changes in this section require a <strong>server restart</strong> to take effect.</div>
+    <form method="post" action="/settings/server">
+        <div class="settings-row">
+            <div class="settings-label">
+                MCP Listen Host
+            </div>
+            <div>
+                <input type="text" name="host" class="form-input" value="{{ settings.host | default('127.0.0.1') }}">
+                <div class="form-hint">IP address for MCP and admin portal. <code>127.0.0.1</code> = localhost only, <code>0.0.0.0</code> = all interfaces.</div>
+            </div>
+        </div>
+        <div class="settings-row">
+            <div class="settings-label">
+                MCP Listen Port
+            </div>
+            <div>
+                <div class="number-input-group">
+                    <button type="button" class="num-btn num-minus">&minus;</button>
+                    <input type="number" name="port" value="{{ settings.port | default(8080) }}" min="1" max="65535">
+                    <button type="button" class="num-btn num-plus">+</button>
+                </div>
+                <div class="form-hint">TCP port for the MCP protocol endpoint (<code>/mcp</code>).</div>
+            </div>
+        </div>
+        <div class="settings-row">
+            <div class="settings-label">Transport</div>
+            <div>
+                <select name="transport" class="form-select" style="width:auto;">
+                    <option value="http" {% if settings.transport == 'http' %}selected{% endif %}>HTTP (Streamable HTTP — recommended)</option>
+                    <option value="sse" {% if settings.transport == 'sse' %}selected{% endif %}>SSE (Server-Sent Events)</option>
+                    <option value="stdio" {% if settings.transport == 'stdio' or not settings.transport %}selected{% endif %}>STDIO (subprocess mode)</option>
+                </select>
+                <div class="form-hint">MCP transport protocol. HTTP is recommended for network clients.</div>
+            </div>
+        </div>
+        <div class="settings-row">
+            <div class="settings-label">Log Level</div>
+            <div>
+                {% set current_log_level = settings.log_level | default('info') | lower %}
+                <select name="log_level" class="form-select" style="width:auto;">
+                    <option value="debug" {% if current_log_level == 'debug' %}selected{% endif %}>debug</option>
+                    <option value="info" {% if current_log_level == 'info' %}selected{% endif %}>info</option>
+                    <option value="warning" {% if current_log_level == 'warning' %}selected{% endif %}>warning</option>
+                    <option value="error" {% if current_log_level == 'error' %}selected{% endif %}>error</option>
+                    <option value="critical" {% if current_log_level == 'critical' %}selected{% endif %}>critical</option>
+                </select>
+            </div>
+        </div>
+        <div class="settings-row">
+            <div class="settings-label">
+                Log File
+            </div>
+            <div>
+                <input type="text" name="log_file" class="form-input" value="{{ settings.log_file | default('') }}" placeholder="/var/log/zabbix-mcp/server.log">
+                <div class="form-hint">Path to log file. Empty = stderr only. Note: changing this path also requires updating logrotate config manually.</div>
+            </div>
+        </div>
+        <div class="settings-row">
+            <div class="settings-label">Compact Output</div>
+            <div>
+                <label class="toggle-label">
+                    <span class="toggle">
+                        <input type="checkbox" name="compact_output" value="true" {% if settings.compact_output is not defined or settings.compact_output %}checked{% endif %}>
+                        <span class="toggle-slider"></span>
+                    </span>
+                    Return only key fields from get methods (reduces LLM token usage)
+                </label>
+            </div>
+        </div>
+        {% if current_user_role != 'viewer' %}
+        <div style="margin-top:16px;">
+            <button type="submit" class="btn btn-primary btn-sm">Save MCP Server Settings</button>
+        </div>
+        {% endif %}
+    </form>
+</div>
+
+<!-- Section 2: TLS & Access -->
+<div class="settings-section">
+    <h2 class="settings-section-title">&#x1F512; TLS &amp; Network Security</h2>
+    <div class="form-hint" style="margin-bottom:12px;">&#x26A0;&#xFE0F; All changes in this section require a <strong>server restart</strong> to take effect.</div>
+    {% set tls_active = settings.tls_cert_file and settings.tls_key_file %}
+    <div style="margin-bottom:16px;">
+        {% if tls_active %}
+        <span class="badge badge-success">TLS Enabled</span>
+        <span class="text-sm text-muted" style="margin-left:8px;">HTTPS active for both MCP endpoint and admin portal</span>
+        {% else %}
+        <span class="badge badge-muted">TLS Not Configured</span>
+        <span class="text-sm text-muted" style="margin-left:8px;">MCP and admin portal running over plain HTTP</span>
+        {% endif %}
+    </div>
+    <form method="post" action="/settings/tls_access">
+        <div class="settings-row">
+            <div class="settings-label">
+                TLS Certificate
+            </div>
+            <div>
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <input type="text" name="tls_cert_file" class="form-input" value="{{ settings.tls_cert_file | default('') }}" placeholder="/etc/ssl/certs/mcp.crt">
+                    {% if current_user_role == 'admin' %}
+                    <label class="btn btn-ghost btn-sm" style="cursor:pointer;" tabindex="0" role="button" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.querySelector('input[type=file]').click();}">
+                        &#x1F4C1; Upload
+                        <input type="file" name="file" accept=".pem,.crt,.cert" style="display:none;" form="upload-tls-cert-form" onchange="document.getElementById('upload-tls-cert-form').submit()">
+                    </label>
+                    {% endif %}
+                </div>
+                <div class="form-hint">Path to PEM certificate file. Applies to both MCP (:{{ settings.port | default(8080) }}) and admin portal (:{{ settings.admin_port | default(9090) }}). Max 100 KB.</div>
+            </div>
+        </div>
+        <div class="settings-row">
+            <div class="settings-label">
+                TLS Key
+            </div>
+            <div>
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <input type="text" name="tls_key_file" class="form-input" value="{{ settings.tls_key_file | default('') }}" placeholder="/etc/ssl/private/mcp.key">
+                    {% if current_user_role == 'admin' %}
+                    <label class="btn btn-ghost btn-sm" style="cursor:pointer;" tabindex="0" role="button" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.querySelector('input[type=file]').click();}">
+                        &#x1F4C1; Upload
+                        <input type="file" name="file" accept=".pem,.key" style="display:none;" form="upload-tls-key-form" onchange="document.getElementById('upload-tls-key-form').submit()">
+                    </label>
+                    {% endif %}
+                </div>
+                <div class="form-hint">Path to PEM private key file. Both fields must be set to enable TLS. Max 100 KB. Stored with 0600 permissions.</div>
+            </div>
+        </div>
+        <div class="settings-row">
+            <div class="settings-label">CORS Origins</div>
+            <div>
+                <textarea name="cors_origins" class="form-input" rows="2" placeholder="https://example.com, https://app.example.com">{{ settings.cors_origins | join(', ') if settings.cors_origins else '' }}</textarea>
+                <div class="form-hint">Comma-separated list of allowed CORS origins. Empty = CORS disabled.</div>
+            </div>
+        </div>
+        <div class="settings-row">
+            <div class="settings-label">IP Allowlist</div>
+            <div>
+                <textarea name="allowed_hosts" class="form-input" rows="2" placeholder="192.168.1.0/24, 10.0.0.1">{{ settings.allowed_hosts | join(', ') if settings.allowed_hosts else '' }}</textarea>
+                <div class="form-hint">Comma-separated IP/CIDR ranges. Empty = allow all.</div>
+            </div>
+        </div>
+        <div class="settings-row">
+            <div class="settings-label">Import Directories</div>
+            <div>
+                <textarea name="allowed_import_dirs" class="form-input" rows="2" placeholder="/opt/zabbix/import, /tmp/imports">{{ settings.allowed_import_dirs | join(', ') if settings.allowed_import_dirs else '' }}</textarea>
+                <div class="form-hint">Directories allowed for <code>source_file</code> imports. Empty = disabled.</div>
+            </div>
+        </div>
+        <div class="settings-row">
+            <div class="settings-label">Rate Limit</div>
+            <div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <div class="number-input-group">
+                        <button type="button" class="num-btn num-minus">&minus;</button>
+                        <input type="number" name="rate_limit" value="{{ settings.rate_limit | default(300) }}" min="0">
+                        <button type="button" class="num-btn num-plus">+</button>
+                    </div>
+                    <span class="text-muted">requests/min per token</span>
+                </div>
+                <div class="form-hint">0 = unlimited.</div>
+            </div>
+        </div>
+        {% if current_user_role != 'viewer' %}
+        <div style="margin-top:16px;">
+            <button type="submit" class="btn btn-primary btn-sm">Save TLS &amp; Security Settings</button>
+        </div>
+        {% endif %}
+    </form>
+</div>
+
+<!-- Section 3: Tool Exposure -->
+<div class="settings-section">
+    <h2 class="settings-section-title">&#x1F527; Tool Exposure</h2>
+    <div class="form-hint" style="margin-bottom:12px;">&#x26A0;&#xFE0F; All changes in this section require a <strong>server restart</strong> to take effect.</div>
+    <form method="post" action="/settings/tools">
+        <input type="hidden" name="disabled_tools" id="disabled-tools-input" value="{{ settings.disabled_tools | join(',') if settings.disabled_tools else '' }}">
+
+        <div class="settings-row">
+            <div class="settings-label">Tool Allowlist</div>
+            <div>
+                <input type="text" name="tools" class="form-input" value="{{ settings.tools | join(', ') if settings.tools else '' }}" placeholder="Leave empty = all tools registered">
+                <div class="form-hint">Comma-separated list of tool groups or prefixes to register. Empty = all ~225 tools. Example: <code>monitoring, data_collection, alerts</code></div>
+            </div>
+        </div>
+
+        <div class="form-hint" style="margin-bottom:12px; margin-top:16px;">
+            &#x26A0;&#xFE0F; Disabled tools are hidden from <strong>all</strong> MCP tokens globally. Drag bubbles between Allowed and Disabled, or click to toggle.
+        </div>
+
+        <input type="text" class="form-input" placeholder="Search tools and groups..."
+               oninput="filterToolBubbles(this.value)" style="margin-bottom:16px;" id="tool-search">
+
+        <div class="tool-zones">
+            <div class="tool-zone tool-zone-allowed" id="zone-allowed"
+                 ondragover="event.preventDefault(); this.classList.add('drag-over')"
+                 ondragleave="this.classList.remove('drag-over')"
+                 ondrop="dropTool(event, 'allowed'); this.classList.remove('drag-over')">
+                <div class="tool-zone-header">&#x2705; Allowed</div>
+                <div class="tool-zone-bubbles" id="allowed-bubbles"></div>
+            </div>
+            <div class="tool-zone tool-zone-disabled" id="zone-disabled"
+                 ondragover="event.preventDefault(); this.classList.add('drag-over')"
+                 ondragleave="this.classList.remove('drag-over')"
+                 ondrop="dropTool(event, 'disabled'); this.classList.remove('drag-over')">
+                <div class="tool-zone-header">&#x274C; Disabled</div>
+                <div class="tool-zone-bubbles" id="disabled-bubbles"></div>
+            </div>
+        </div>
+
+        {% if current_user_role != 'viewer' %}
+        <div style="margin-top:16px;">
+            <button type="submit" class="btn btn-primary btn-sm">Save Tool Settings</button>
+        </div>
+        {% endif %}
+    </form>
+</div>
+
+<!-- Section 4: Reporting -->
+<div class="settings-section">
+    <h2 class="settings-section-title">&#x1F4CA; PDF Reports &amp; Branding</h2>
+    <div class="form-hint" style="margin-bottom:12px;">&#x26A0;&#xFE0F; All changes in this section require a <strong>server restart</strong> to take effect.</div>
+    <form method="post" action="/settings/reporting">
+        <div class="settings-row">
+            <div class="settings-label">Company Name</div>
+            <div>
+                <input type="text" name="report_company" class="form-input" value="{{ settings.report_company | default('') }}" placeholder="initMAX s.r.o.">
+                <div class="form-hint">Displayed in report headers (e.g. "Company / Availability Report").</div>
+            </div>
+        </div>
+        <div class="settings-row">
+            <div class="settings-label">Report Subtitle</div>
+            <div>
+                <input type="text" name="report_subtitle" class="form-input" value="{{ settings.report_subtitle | default('IT Monitoring Service') }}">
+                <div class="form-hint">Shown below the company logo in reports.</div>
+            </div>
+        </div>
+        <div class="settings-row">
+            <div class="settings-label">Report Logo</div>
+            <div>
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <input type="text" name="report_logo" class="form-input" value="{{ settings.report_logo | default('') }}" placeholder="/etc/zabbix-mcp/logo.png" readonly>
+                    {% if current_user_role != 'viewer' %}
+                    <label class="btn btn-ghost btn-sm" style="cursor:pointer;" tabindex="0" role="button" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.querySelector('input[type=file]').click();}">
+                        &#x1F4C1; Upload
+                        <input type="file" name="file" accept=".png,.jpg,.jpeg,.svg" style="display:none;" form="upload-logo-form" onchange="document.getElementById('upload-logo-form').submit()">
+                    </label>
+                    {% endif %}
+                </div>
+                <div class="form-hint">Path to PNG/JPG/SVG logo for report headers (max 5 MB). Upload or set path manually in config.toml.</div>
+                {% if settings.report_logo %}
+                <div class="text-sm" style="margin-top:4px;">
+                    <span class="badge badge-success">Logo configured</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% if current_user_role != 'viewer' %}
+        <div style="margin-top:16px;">
+            <button type="submit" class="btn btn-primary btn-sm">Save Reporting Settings</button>
+        </div>
+        {% endif %}
+    </form>
+</div>
+
+<!-- Section 5: Admin Portal -->
+<div class="settings-section">
+    <h2 class="settings-section-title">&#x2699;&#xFE0F; Admin Portal</h2>
+    <div class="form-hint" style="margin-bottom:12px;">&#x26A0;&#xFE0F; All changes in this section require a <strong>server restart</strong> to take effect.</div>
+    <form method="post" action="/settings/admin">
+        <div class="settings-row">
+            <div class="settings-label">Enabled</div>
+            <div>
+                <label class="toggle-label">
+                    <span class="toggle">
+                        <input type="checkbox" name="enabled" value="true" {% if settings.admin_enabled %}checked{% endif %}>
+                        <span class="toggle-slider"></span>
+                    </span>
+                    Enable admin portal
+                </label>
+                <div class="form-hint">When disabled, only the MCP endpoint runs. All config data stays in config.toml.</div>
+            </div>
+        </div>
+        <div class="settings-row">
+            <div class="settings-label">
+                Admin Port
+            </div>
+            <div>
+                <div class="number-input-group">
+                    <button type="button" class="num-btn num-minus">&minus;</button>
+                    <input type="number" name="port" value="{{ settings.admin_port | default(9090) }}" min="1" max="65535">
+                    <button type="button" class="num-btn num-plus">+</button>
+                </div>
+                <div class="form-hint">Separate port for admin UI. Shares host and TLS with MCP server.</div>
+            </div>
+        </div>
+        {% if current_user_role != 'viewer' %}
+        <div style="margin-top:16px;">
+            <button type="submit" class="btn btn-primary btn-sm">Save Admin Settings</button>
+        </div>
+        {% endif %}
+    </form>
+</div>
+
+<!-- Hidden upload forms (outside all section forms to avoid nesting) -->
+<form id="upload-logo-form" method="post" action="/settings/upload/logo" enctype="multipart/form-data" style="display:none;"></form>
+<form id="upload-tls-cert-form" method="post" action="/settings/upload/tls_cert" enctype="multipart/form-data" style="display:none;"></form>
+<form id="upload-tls-key-form" method="post" action="/settings/upload/tls_key" enctype="multipart/form-data" style="display:none;"></form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Tool Groups data
+var TOOL_DATA = [
+    {name: "monitoring", type: "group", desc: "Hosts, problems, triggers, items, events, history, trends, SLA, dashboards, maps",
+     tools: ["host","hostgroup","hostinterface","hostprototype","item","itemprototype","trigger","triggerprototype","problem","event","history","trend","graph","graphitem","graphprototype","discoveryrule","discoveryruleprototype","dcheck","dhost","drule","dservice","httptest","sla"]},
+    {name: "data_collection", type: "group", desc: "Templates, template groups, dashboards, value maps, configuration",
+     tools: ["template","templategroup","templatedashboard","valuemap","dashboard"]},
+    {name: "alerts", type: "group", desc: "Actions, media types, alert history, script execution",
+     tools: ["action","alert","mediatype","script"]},
+    {name: "users", type: "group", desc: "Users, user groups, roles, tokens, authentication",
+     tools: ["user","usergroup","userdirectory","usermacro","token","role","mfa"]},
+    {name: "administration", type: "group", desc: "Settings, proxies, housekeeping, audit log, connectors, modules",
+     tools: ["settings","housekeeping","authentication","autoregistration","configuration","connector","correlation","hanode","iconmap","image","maintenance","map","module","proxy","proxygroup","regexp","report","task","auditlog"]},
+];
+
+var disabledList = (document.getElementById('disabled-tools-input').value || '').split(',').filter(Boolean);
+
+function makeBubble(item) {
+    var el = document.createElement('span');
+    el.className = 'tool-bubble' + (item.type === 'group' ? ' tool-bubble-group' : ' tool-bubble-tool');
+    if (item.type === 'group') el.dataset.group = item.name;
+    el.textContent = item.name.replace(/_/g, ' ');
+    el.dataset.tooltip = item.desc || item.name;
+    el.draggable = true;
+    el.tabIndex = 0;
+    el.setAttribute('role', 'button');
+    el.dataset.name = item.name;
+    el.dataset.type = item.type;
+    el.ondragstart = function(e) {
+        e.dataTransfer.setData('text/plain', item.name);
+        el.classList.add('dragging');
+    };
+    el.ondragend = function() { el.classList.remove('dragging'); };
+    el.onclick = function() { toggleBubble(item.name); };
+    el.onkeydown = function(e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleBubble(item.name); }
+    };
+    return el;
+}
+
+function toggleBubble(name) {
+    var idx = disabledList.indexOf(name);
+    if (idx !== -1) {
+        // Directly in disabled list — remove it
+        disabledList.splice(idx, 1);
+    } else {
+        // Check if disabled via parent group
+        var parentGroup = null;
+        TOOL_DATA.forEach(function(g) {
+            if (g.tools && g.tools.indexOf(name) !== -1) parentGroup = g;
+        });
+        if (parentGroup && disabledList.indexOf(parentGroup.name) !== -1) {
+            // Explode group: remove group, add all siblings except clicked tool
+            disabledList.splice(disabledList.indexOf(parentGroup.name), 1);
+            parentGroup.tools.forEach(function(t) {
+                if (t !== name && disabledList.indexOf(t) === -1) disabledList.push(t);
+            });
+        } else {
+            // Not disabled at all — disable it
+            disabledList.push(name);
+            // If disabling a group, remove individual tool entries (group covers them)
+            var group = TOOL_DATA.find(function(g) { return g.name === name; });
+            if (group && group.tools) {
+                group.tools.forEach(function(t) {
+                    var ti = disabledList.indexOf(t);
+                    if (ti !== -1) disabledList.splice(ti, 1);
+                });
+            }
+        }
+    }
+    syncState();
+}
+
+function dropTool(e, zone) {
+    e.preventDefault();
+    var name = e.dataTransfer.getData('text/plain');
+    if (!name) return;
+    var idx = disabledList.indexOf(name);
+    if (zone === 'disabled' && idx === -1) { disabledList.push(name); }
+    else if (zone === 'allowed' && idx !== -1) { disabledList.splice(idx, 1); }
+    syncState();
+}
+
+function syncState() {
+    document.getElementById('disabled-tools-input').value = disabledList.join(',');
+    renderBubbles();
+}
+
+function renderBubbles() {
+    var allowedEl = document.getElementById('allowed-bubbles');
+    var disabledEl = document.getElementById('disabled-bubbles');
+    allowedEl.innerHTML = '';
+    disabledEl.innerHTML = '';
+
+    TOOL_DATA.forEach(function(group) {
+        // Group bubble
+        var groupBubble = makeBubble(group);
+        if (disabledList.indexOf(group.name) !== -1) {
+            groupBubble.classList.add('disabled');
+            disabledEl.appendChild(groupBubble);
+        } else {
+            allowedEl.appendChild(groupBubble);
+        }
+        // Individual tool bubbles
+        if (group.tools) {
+            group.tools.forEach(function(toolName) {
+                var toolItem = {name: toolName, type: "tool", desc: group.name + " → " + toolName, group: group.name};
+                var bubble = makeBubble(toolItem);
+                if (disabledList.indexOf(toolName) !== -1 || disabledList.indexOf(group.name) !== -1) {
+                    bubble.classList.add('disabled');
+                    disabledEl.appendChild(bubble);
+                } else {
+                    allowedEl.appendChild(bubble);
+                }
+            });
+        }
+    });
+
+    if (!allowedEl.children.length) {
+        allowedEl.textContent = '';
+        var msg = document.createElement('span');
+        msg.className = 'text-muted';
+        msg.style.padding = '12px';
+        msg.textContent = 'All tools disabled';
+        allowedEl.appendChild(msg);
+    }
+    if (!disabledEl.children.length) {
+        disabledEl.textContent = '';
+        var msg2 = document.createElement('span');
+        msg2.className = 'text-muted';
+        msg2.style.padding = '12px';
+        msg2.textContent = 'No tools disabled';
+        disabledEl.appendChild(msg2);
+    }
+}
+
+function filterToolBubbles(q) {
+    q = q.toLowerCase();
+    var visibleAllowed = 0, visibleDisabled = 0;
+    document.querySelectorAll('.tool-bubble').forEach(function(b) {
+        var text = (b.textContent + ' ' + (b.title || '')).toLowerCase();
+        var match = !q || text.indexOf(q) !== -1;
+        b.style.display = match ? '' : 'none';
+        if (match) {
+            if (b.classList.contains('disabled')) visibleDisabled++;
+            else visibleAllowed++;
+        }
+    });
+    // Update empty states
+    var allowedEmpty = document.getElementById('allowed-bubbles').querySelector('.tool-zone-empty');
+    var disabledEmpty = document.getElementById('disabled-bubbles').querySelector('.tool-zone-empty');
+    if (allowedEmpty) allowedEmpty.remove();
+    if (disabledEmpty) disabledEmpty.remove();
+    if (q && visibleAllowed === 0) {
+        var msg = document.createElement('span');
+        msg.className = 'text-muted tool-zone-empty';
+        msg.style.padding = '12px';
+        msg.textContent = 'No matches in allowed';
+        document.getElementById('allowed-bubbles').appendChild(msg);
+    }
+    if (q && visibleDisabled === 0) {
+        var msg = document.createElement('span');
+        msg.className = 'text-muted tool-zone-empty';
+        msg.style.padding = '12px';
+        msg.textContent = 'No matches in disabled';
+        document.getElementById('disabled-bubbles').appendChild(msg);
+    }
+}
+
+renderBubbles();
+</script>
+{% endblock %}

@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Dashboard</h1>
+        <p class="page-subtitle">System overview and recent activity</p>
+    </div>
+</div>
+
+<!-- Stat Cards -->
+<div class="stat-grid">
+    <a href="/tokens" class="stat-card" style="text-decoration:none; color:inherit;">
+        <div class="stat-icon">&#x1F511;</div>
+        <div class="stat-content">
+            <div class="stat-value">{{ stats.active_tokens | default(0) }}</div>
+            <div class="stat-label">MCP Tokens</div>
+        </div>
+    </a>
+    <a href="/servers" class="stat-card" style="text-decoration:none; color:inherit;">
+        <div class="stat-icon">&#x1F5A5;</div>
+        <div class="stat-content">
+            <div class="stat-value">{{ servers | length }}</div>
+            <div class="stat-label">Zabbix Servers</div>
+            <div id="server-status-list" style="margin-top:8px;">
+                {% for server in servers %}
+                <div style="display:flex; align-items:center; gap:6px; font-size:0.8rem; color:var(--text-muted);">
+                    <span class="status-dot status-dot-yellow status-dot-pulse" data-server="{{ server.name }}" data-tooltip="{{ server.name }}: checking..." style="flex-shrink:0;"></span>
+                    <span data-server-label="{{ server.name }}">{{ server.name }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </a>
+    <a href="/users" class="stat-card" style="text-decoration:none; color:inherit;">
+        <div class="stat-icon">&#x1F465;</div>
+        <div class="stat-content">
+            <div class="stat-value">{{ stats.admin_users | default(0) }}</div>
+            <div class="stat-label">Admin Users</div>
+        </div>
+    </a>
+    <a href="/templates" class="stat-card" style="text-decoration:none; color:inherit;">
+        <div class="stat-icon">&#x1F4C4;</div>
+        <div class="stat-content">
+            <div class="stat-value">{{ stats.report_templates | default(0) }}</div>
+            <div class="stat-label">Report Templates</div>
+        </div>
+    </a>
+</div>
+
+<!-- Quick Actions -->
+<div class="quick-actions">
+    <a href="/tokens/create" class="btn btn-primary">&#x1F511; Create Token</a>
+    <a href="/servers" class="btn btn-ghost">&#x1F50C; Test Zabbix Servers</a>
+</div>
+
+<!-- Recent Audit Activity -->
+<div class="card">
+    <div class="card-header">
+        <h2 class="card-title">Recent Activity</h2>
+        <span class="text-sm text-muted">Latest activity</span>
+    </div>
+    <div class="card-body">
+        <div class="table-container" style="border:none;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Action</th>
+                        <th>User</th>
+                        <th>Target</th>
+                        <th>IP</th>
+                    </tr>
+                </thead>
+                <tbody id="recent-activity-body">
+                    {% if audit_entries %}
+                    {% for entry in audit_entries %}
+                    <tr>
+                        <td class="text-sm text-muted">{{ entry.timestamp }}</td>
+                        <td><span class="badge badge-primary">{{ entry.action }}</span></td>
+                        <td>{{ entry.user }}</td>
+                        <td>{{ entry.target_type }}{% if entry.target_id %} {{ entry.target_id }}{% endif %}</td>
+                        <td class="monospace text-sm">{{ entry.ip }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="text-center text-muted" style="padding:24px;">No recent activity</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Async check Zabbix server status — update dots from yellow/pulsing to green/red
+(function() {
+    fetch('/api/server-status')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            document.querySelectorAll('.status-dot[data-server]').forEach(function(dot) {
+                var name = dot.dataset.server;
+                var info = data[name];
+                dot.classList.remove('status-dot-yellow', 'status-dot-pulse');
+                var label = document.querySelector('[data-server-label="' + name + '"]');
+                if (info && info.status === 'online') {
+                    dot.classList.add('status-dot-green');
+                    dot.dataset.tooltip = name + ': online (Zabbix ' + info.version + ')';
+                    if (label) label.textContent = name + ' — Zabbix ' + info.version;
+                } else if (info && info.status === 'token_error') {
+                    dot.classList.add('status-dot-yellow');
+                    dot.dataset.tooltip = name + ': API online (Zabbix ' + info.version + ') but token invalid';
+                    if (label) { label.textContent = name + ' — Zabbix ' + info.version + ' '; var warn = document.createElement('span'); warn.style.color = 'var(--color-warning)'; warn.textContent = 'token invalid'; label.appendChild(warn); }
+                } else {
+                    dot.classList.add('status-dot-red');
+                    var errMsg = info ? info.error || 'error' : 'not configured';
+                    dot.dataset.tooltip = name + ': ' + errMsg;
+                    if (label) label.textContent = name + ' — ' + errMsg;
+                }
+            });
+        })
+        .catch(function() {
+            document.querySelectorAll('.status-dot[data-server]').forEach(function(dot) {
+                var name = dot.dataset.server;
+                dot.classList.remove('status-dot-yellow', 'status-dot-pulse');
+                dot.classList.add('status-dot-red');
+                dot.dataset.tooltip = name + ': check failed';
+                var label = document.querySelector('[data-server-label="' + name + '"]');
+                if (label) label.textContent = name + ' — check failed';
+            });
+        });
+})();
+</script>
+{% endblock %}

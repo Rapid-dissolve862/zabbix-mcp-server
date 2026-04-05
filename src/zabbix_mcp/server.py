@@ -18,11 +18,14 @@
 """MCP server setup, lifespan management, and dynamic tool registration."""
 
 import asyncio
+import base64
+import hashlib
 import hmac
 import inspect
 import json
 import logging
 import re
+import secrets
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -1048,6 +1051,13 @@ def _make_tool_handler(
         try:
             server_name = client_manager.resolve_server(server_name)
 
+            # Check token authorization (servers, scopes, read_only)
+            from zabbix_mcp.token_store import check_token_authorization
+            _tool_prefix = method_def.tool_name.rsplit("_", 1)[0] if "_" in method_def.tool_name else method_def.tool_name
+            _auth_err = check_token_authorization(server_name, tool_prefix=_tool_prefix, is_write=not method_def.read_only)
+            if _auth_err:
+                return json.dumps({"error": True, "message": _auth_err, "type": "AuthorizationError"})
+
             if not method_def.read_only:
                 client_manager.check_write(server_name)
 
@@ -1123,6 +1133,7 @@ def _register_tools(
     *,
     allowed_import_dirs: list[str] | None = None,
     compact_output: bool = True,
+    config: AppConfig | None = None,
 ) -> int:
     """Register Zabbix API methods as MCP tools. Returns tool count.
 
@@ -1134,6 +1145,8 @@ def _register_tools(
     When *disabled_tools* is set, tools whose prefix matches an entry
     are excluded. This is applied after the allowlist filter.
     """
+    from zabbix_mcp.token_store import check_token_authorization
+
     server_names = client_manager.server_names
     count = 0
 
@@ -1169,6 +1182,14 @@ def _register_tools(
             annotations=ToolAnnotations(**tool_annotations),
         )
         count += 1
+
+    # Helper: check if an extension tool should be registered (respects tools/disabled_tools)
+    def _ext_allowed(tool_name: str) -> bool:
+        if tools_filter is not None and tool_name not in tools_filter and "extensions" not in (tools_filter or []):
+            return False
+        if disabled_tools is not None and (tool_name in disabled_tools or "extensions" in disabled_tools):
+            return False
+        return True
 
     # Generic raw API call tool
     server_desc = (
@@ -1209,6 +1230,13 @@ def _register_tools(
                 method_lower in _KNOWN_READ_ONLY
                 or any(method_lower.endswith(s) for s in _READ_ONLY_SUFFIXES)
             )
+
+            # Token authorization: server + scope + read_only
+            _prefix = method.split(".")[0].lower() if "." in method else ""
+            _auth_err = check_token_authorization(server_name, tool_prefix=_prefix, is_write=not is_read_only)
+            if _auth_err:
+                return json.dumps({"error": True, "message": _auth_err, "type": "AuthorizationError"})
+
             if not is_read_only:
                 client_manager.check_write(server_name)
 
@@ -1222,11 +1250,12 @@ def _register_tools(
             logger.exception("Error in raw API call '%s' on server '%s'", method, server_name)
             return json.dumps({"error": True, "message": f"API call failed for {method}. Check server logs for details.", "type": "APIError"})
 
-    mcp.add_tool(
-        zabbix_raw_api_call,
-        annotations=ToolAnnotations(openWorldHint=True),
-    )
-    count += 1
+    if _ext_allowed("zabbix_raw_api_call"):
+        mcp.add_tool(
+            zabbix_raw_api_call,
+            annotations=ToolAnnotations(openWorldHint=True),
+        )
+        count += 1
 
     # Health check tool
     async def health_check() -> str:
@@ -1246,11 +1275,303 @@ def _register_tools(
                 results["zabbix_servers"][label] = {"status": "error"}
         return json.dumps(results, indent=2)
 
-    mcp.add_tool(
-        health_check,
-        annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True),
-    )
-    count += 1
+    if _ext_allowed("health_check"):
+        mcp.add_tool(
+            health_check,
+            annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True),
+        )
+        count += 1
+
+    # ------------------------------------------------------------------
+    # Extension tools (server-side analytics, graph export, reporting)
+    # ------------------------------------------------------------------
+    from zabbix_mcp.api.extensions import graph_render, anomaly_detect, capacity_forecast
+
+    async def _graph_render(
+        *,
+        graphid: Annotated[str, Field(description="Zabbix graph ID (numeric)")],
+        period: Annotated[Optional[str], Field(description="Time period: '1h', '6h', '1d', '7d', '30d' (default: '1h')")] = "1h",
+        width: Annotated[Optional[int], Field(description="Image width in pixels, 100-4096 (default: 800)")] = 800,
+        height: Annotated[Optional[int], Field(description="Image height in pixels, 50-2048 (default: 200)")] = 200,
+        server: Annotated[Optional[str], Field(description=server_desc)] = None,
+    ) -> str:
+        """Render a Zabbix graph as a PNG image. Returns a base64-encoded data URI
+        that multimodal AI models can display and interpret directly. Use graph_get
+        to find graph IDs first."""
+        srv = client_manager.resolve_server(server or client_manager.default_server)
+        _auth_err = check_token_authorization(srv, tool_prefix="graph")
+        if _auth_err:
+            return json.dumps({"error": True, "message": _auth_err, "type": "AuthorizationError"})
+        return await asyncio.to_thread(
+            graph_render, client_manager, srv,
+            graphid=graphid, period=period, width=width, height=height,
+        )
+
+    if _ext_allowed("graph_render"):
+        mcp.add_tool(
+            _graph_render, name="graph_render",
+            annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True),
+        )
+        count += 1
+
+    async def _anomaly_detect(
+        *,
+        item_key: Annotated[str, Field(description="Item key pattern to analyze (e.g. 'system.cpu.util', 'vm.memory.utilization')")],
+        hostgroupid: Annotated[Optional[str], Field(description="Host group ID — analyze all hosts in this group")] = None,
+        hostid: Annotated[Optional[str], Field(description="Single host ID — compare against group baseline")] = None,
+        period: Annotated[Optional[str], Field(description="Analysis period: '1d', '7d', '30d' (default: '7d')")] = "7d",
+        threshold: Annotated[Optional[float], Field(description="Z-score threshold for anomaly (default: 2.0 = 2 standard deviations)")] = 2.0,
+        server: Annotated[Optional[str], Field(description=server_desc)] = None,
+    ) -> str:
+        """Detect anomalous hosts by comparing metric values across a host group.
+        Uses z-score analysis on trend data to find hosts that deviate significantly
+        from the group average. Requires at least 2 hosts with data."""
+        srv = client_manager.resolve_server(server or client_manager.default_server)
+        _auth_err = check_token_authorization(srv, tool_prefix="host")
+        if _auth_err:
+            return json.dumps({"error": True, "message": _auth_err, "type": "AuthorizationError"})
+        return await asyncio.to_thread(
+            anomaly_detect, client_manager, srv,
+            item_key=item_key, hostgroupid=hostgroupid, hostid=hostid,
+            period=period, threshold=threshold,
+        )
+
+    if _ext_allowed("anomaly_detect"):
+        mcp.add_tool(
+            _anomaly_detect, name="anomaly_detect",
+            annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True),
+        )
+        count += 1
+
+    async def _capacity_forecast(
+        *,
+        hostid: Annotated[str, Field(description="Host ID to analyze")],
+        item_key: Annotated[str, Field(description="Item key to forecast (e.g. 'vfs.fs.size[/,pused]', 'system.cpu.util')")],
+        threshold: Annotated[Optional[float], Field(description="Value threshold to predict when reached (default: 90.0)")] = 90.0,
+        period: Annotated[Optional[str], Field(description="Historical period for regression: '7d', '30d', '90d' (default: '30d')")] = "30d",
+        server: Annotated[Optional[str], Field(description=server_desc)] = None,
+    ) -> str:
+        """Forecast when a metric will reach a threshold using linear regression
+        on historical trend data. Returns predicted date, daily growth rate,
+        and R-squared confidence. Useful for capacity planning (disk, CPU, memory)."""
+        srv = client_manager.resolve_server(server or client_manager.default_server)
+        _auth_err = check_token_authorization(srv, tool_prefix="host")
+        if _auth_err:
+            return json.dumps({"error": True, "message": _auth_err, "type": "AuthorizationError"})
+        return await asyncio.to_thread(
+            capacity_forecast, client_manager, srv,
+            hostid=hostid, item_key=item_key, threshold=threshold, period=period,
+        )
+
+    if _ext_allowed("capacity_forecast"):
+        mcp.add_tool(
+            _capacity_forecast, name="capacity_forecast",
+            annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True),
+        )
+        count += 1
+
+    # ------------------------------------------------------------------
+    # PDF Report generation (optional — requires weasyprint + jinja2)
+    # ------------------------------------------------------------------
+    try:
+        from zabbix_mcp.reporting.engine import ReportEngine, REPORTING_AVAILABLE, _REPORT_TEMPLATES
+        if REPORTING_AVAILABLE:
+            report_engine = ReportEngine(
+                logo_path=getattr(config.server, "report_logo", None),
+                company_name=getattr(config.server, "report_company", ""),
+                subtitle=getattr(config.server, "report_subtitle", "IT Monitoring Service"),
+            )
+
+            # Load custom templates from [report_templates.*] config sections
+            try:
+                from zabbix_mcp.admin.config_writer import load_config_document as _load_cfg_doc, TOMLKIT_AVAILABLE as _TK
+                if _TK:
+                    _cfg_path = getattr(config, "_config_path", None)
+                    if _cfg_path:
+                        _cfg_doc = _load_cfg_doc(_cfg_path)
+                        _custom_tmpls = _cfg_doc.get("report_templates", {})
+                        if _custom_tmpls:
+                            report_engine.load_custom_templates({k: dict(v) for k, v in _custom_tmpls.items()})
+                            logger.info("Loaded %d custom report templates", len(_custom_tmpls))
+            except Exception as _e:
+                logger.warning("Failed to load custom report templates: %s", _e)
+
+            async def _report_generate(
+                *,
+                report_type: Annotated[str, Field(description="Report type: 'availability', 'capacity_host', 'capacity_network', 'backup'")],
+                hostgroupid: Annotated[str, Field(description="Host group ID to include in the report")],
+                period: Annotated[Optional[str], Field(description="Report period: '7d', '30d', '90d' (default: '30d')")] = "30d",
+                company: Annotated[Optional[str], Field(description="Company name for report header (overrides config)")] = None,
+                server: Annotated[Optional[str], Field(description=server_desc)] = None,
+            ) -> str:
+                """Generate a PDF report from Zabbix monitoring data. Returns the report
+                as a base64-encoded PDF data URI. Supported report types: availability
+                (SLA/uptime), capacity_host (CPU/memory/disk), capacity_network
+                (bandwidth/traffic), backup (daily success/fail matrix)."""
+                from zabbix_mcp.reporting import data_fetcher
+                srv = client_manager.resolve_server(server or client_manager.default_server)
+                _auth_err = check_token_authorization(srv, tool_prefix="host")
+                if _auth_err:
+                    return json.dumps({"error": True, "message": _auth_err, "type": "AuthorizationError"})
+
+                valid_types = tuple(_REPORT_TEMPLATES.keys())
+                if report_type not in valid_types:
+                    return json.dumps({"error": f"Invalid report_type. Must be one of: {', '.join(valid_types)}"})
+
+                try:
+                    # Convert period string (e.g. "30d") to epoch timestamps
+                    import re as _re
+                    _period_match = _re.match(r"^(\d+)([dhm])$", period or "30d")
+                    if not _period_match:
+                        return json.dumps({"error": "Invalid period format. Use e.g. '7d', '30d', '90d'."})
+                    _amount, _unit = int(_period_match.group(1)), _period_match.group(2)
+                    _delta = {"d": 86400, "h": 3600, "m": 60}[_unit] * _amount
+                    _period_to = int(time.time())
+                    _period_from = _period_to - _delta
+
+                    fetcher = getattr(data_fetcher, f"fetch_{report_type}_data")
+                    context = await asyncio.to_thread(
+                        fetcher, client_manager, srv,
+                        {"hostgroupid": hostgroupid, "period": period, "period_from": _period_from, "period_to": _period_to, "company": company or report_engine.company_name},
+                    )
+                    pdf_bytes = await asyncio.to_thread(
+                        report_engine.generate_report, report_type, context,
+                    )
+                    encoded = base64.b64encode(pdf_bytes).decode("ascii")
+                    return json.dumps({
+                        "report": f"data:application/pdf;base64,{encoded}",
+                        "report_type": report_type,
+                        "pages": len(pdf_bytes) // 3000 + 1,  # rough estimate
+                        "size_kb": round(len(pdf_bytes) / 1024, 1),
+                    })
+                except Exception as exc:
+                    logger.exception("Report generation failed for type '%s'", report_type)
+                    return json.dumps({"error": f"Report generation failed: {exc}"})
+
+            if _ext_allowed("report_generate"):
+                mcp.add_tool(
+                    _report_generate, name="report_generate",
+                    annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=True),
+                )
+                count += 1
+                logger.info("PDF reporting enabled (report_generate tool registered)")
+        else:
+            logger.info("PDF reporting disabled (install 'weasyprint' and 'jinja2' to enable)")
+    except ImportError:
+        logger.info("PDF reporting disabled (reporting module not found)")
+
+    # ------------------------------------------------------------------
+    # Action approval flow (two-step prepare + confirm)
+    # ------------------------------------------------------------------
+    _pending_actions: dict[str, dict[str, Any]] = {}  # token -> action details
+
+    async def action_prepare(
+        *,
+        action: Annotated[str, Field(description="Zabbix API method to execute (e.g. 'maintenance.create', 'host.massupdate')")],
+        params: Annotated[dict, Field(description="API method parameters as JSON object")],
+        server: Annotated[Optional[str], Field(description=server_desc)] = None,
+    ) -> str:
+        """Prepare a write action for review before execution. Returns a preview
+        of what will happen and a confirmation token. Use action_confirm with the
+        token to actually execute it. Tokens expire after 5 minutes."""
+        srv = client_manager.resolve_server(server or client_manager.default_server)
+
+        # Token authorization: server + write permission
+        _prefix = action.split(".")[0].lower() if "." in action else ""
+        _auth_err = check_token_authorization(srv, tool_prefix=_prefix, is_write=True)
+        if _auth_err:
+            return json.dumps({"error": True, "message": _auth_err, "type": "AuthorizationError"})
+
+        try:
+            client_manager.check_write(srv)
+        except ReadOnlyError as e:
+            return json.dumps({"error": str(e)})
+
+        # Generate secure token
+        token = secrets.token_urlsafe(32)
+        expires = time.time() + 300  # 5 minutes
+
+        # Cleanup expired tokens
+        now = time.time()
+        expired = [t for t, v in _pending_actions.items() if v["expires"] < now]
+        for t in expired:
+            del _pending_actions[t]
+
+        # Bind to caller token for security (prevent cross-token confirmation)
+        from zabbix_mcp.token_store import current_token_info as _cti
+        _caller_token = _cti.get()
+        _caller_id = _caller_token.id if _caller_token else None
+
+        _pending_actions[token] = {
+            "action": action,
+            "params": params,
+            "server": srv,
+            "expires": expires,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "caller_token_id": _caller_id,
+        }
+
+        return json.dumps({
+            "status": "pending_confirmation",
+            "confirmation_token": token,
+            "action": action,
+            "server": srv,
+            "params_preview": {k: v for k, v in params.items() if k != "password"},
+            "expires_in_seconds": 300,
+            "message": "Review the action above. Call action_confirm with the token to execute.",
+        }, indent=2)
+
+    if _ext_allowed("action_prepare"):
+        mcp.add_tool(
+            action_prepare, name="action_prepare",
+            annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False),
+        )
+        count += 1
+
+    async def action_confirm(
+        *,
+        confirmation_token: Annotated[str, Field(description="Token from action_prepare response")],
+    ) -> str:
+        """Execute a previously prepared action. The confirmation token must match
+        an active (non-expired) prepared action and be from the same caller."""
+        if confirmation_token not in _pending_actions:
+            return json.dumps({"error": "Invalid or expired confirmation token."})
+
+        action_data = _pending_actions[confirmation_token]
+
+        # Verify caller identity matches the preparer
+        from zabbix_mcp.token_store import current_token_info as _cti
+        _caller_token = _cti.get()
+        _caller_id = _caller_token.id if _caller_token else None
+        if action_data.get("caller_token_id") != _caller_id:
+            return json.dumps({"error": "Confirmation token was prepared by a different caller. Access denied."})
+
+        _pending_actions.pop(confirmation_token)
+
+        if action_data["expires"] < time.time():
+            return json.dumps({"error": "Confirmation token has expired. Prepare the action again."})
+
+        try:
+            result = await asyncio.to_thread(
+                client_manager.call, action_data["server"],
+                action_data["action"], action_data["params"],
+            )
+            return _UNTRUSTED_PREAMBLE + json.dumps({
+                "status": "executed",
+                "action": action_data["action"],
+                "server": action_data["server"],
+                "result": result,
+            })
+        except Exception as exc:
+            logger.exception("Action execution failed: %s", action_data["action"])
+            return json.dumps({"error": f"Execution failed: {exc}", "action": action_data["action"]})
+
+    if _ext_allowed("action_confirm"):
+        mcp.add_tool(
+            action_confirm, name="action_confirm",
+            annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=True),
+        )
+        count += 1
 
     return count
 
@@ -1322,16 +1643,69 @@ def run_server(
     port: int = 8080,
 ) -> None:
     """Create and run the MCP server."""
+    # Store runtime port for admin portal MCP health check
+    object.__setattr__(config, '_runtime_port', port)
+
     client_manager = ClientManager(config)
 
     # Determine URL scheme based on TLS configuration
     scheme = "https" if config.server.tls_cert_file else "http"
 
+    # Initialize token store (multi-token auth)
+    from zabbix_mcp.token_store import TokenStore, MultiTokenVerifier
+    token_store = TokenStore()
+
+    # Load tokens from [tokens.*] config sections
+    try:
+        from zabbix_mcp.admin.config_writer import load_config_document, TOMLKIT_AVAILABLE
+        if TOMLKIT_AVAILABLE:
+            config_path = getattr(config, "_config_path", None)
+            if config_path:
+                doc = load_config_document(config_path)
+                tokens_raw = doc.get("tokens", {})
+                if tokens_raw:
+                    token_store.load_from_config({k: dict(v) for k, v in tokens_raw.items()})
+                    logger.info("Loaded %d MCP tokens from config", token_store.token_count)
+    except Exception as e:
+        logger.warning("Failed to load tokens from config: %s", e)
+
+    # Legacy auth_token fallback — also persist to config so it survives token reload
+    if config.server.auth_token and token_store.token_count == 0:
+        token_store.load_legacy_token(config.server.auth_token)
+        logger.info("Using legacy auth_token (migrate to [tokens] for multi-token support)")
+        # Write legacy token to config.toml so it persists across reloads
+        config_path = getattr(config, "_config_path", None)
+        if config_path:
+            try:
+                from zabbix_mcp.admin.config_writer import load_config_document, save_config_document, TOMLKIT_AVAILABLE
+                if TOMLKIT_AVAILABLE:
+                    doc = load_config_document(config_path)
+                    if "tokens" not in doc or "legacy" not in doc.get("tokens", {}):
+                        import tomlkit, hashlib
+                        if "tokens" not in doc:
+                            doc.add("tokens", tomlkit.table(is_super_table=True))
+                        legacy_hash = f"sha256:{hashlib.sha256(config.server.auth_token.encode()).hexdigest()}"
+                        legacy_table = tomlkit.table()
+                        legacy_table["name"] = "Legacy Token"
+                        legacy_table["token_hash"] = legacy_hash
+                        legacy_table["scopes"] = ["*"]
+                        legacy_table["read_only"] = False
+                        legacy_table["is_legacy"] = True
+                        doc["tokens"]["legacy"] = legacy_table
+                        save_config_document(config_path, doc)
+                        logger.info("Legacy auth_token persisted to [tokens.legacy] in config")
+            except Exception as e:
+                logger.warning("Could not persist legacy token to config: %s", e)
+
     # Set up bearer token auth for HTTP transport
     auth_kwargs: dict[str, Any] = {}
-    if config.server.auth_token and transport in ("http", "sse"):
+    has_auth = token_store.token_count > 0 or config.server.auth_token
+    if has_auth and transport in ("http", "sse"):
         server_url = f"{scheme}://{host}:{port}"
-        auth_kwargs["token_verifier"] = _BearerTokenVerifier(config.server.auth_token)
+        if token_store.token_count > 0:
+            auth_kwargs["token_verifier"] = MultiTokenVerifier(token_store)
+        else:
+            auth_kwargs["token_verifier"] = _BearerTokenVerifier(config.server.auth_token)
         auth_kwargs["auth"] = AuthSettings(
             issuer_url=server_url,
             resource_server_url=server_url,
@@ -1457,6 +1831,7 @@ def run_server(
         mcp, client_manager, config.server.tools, config.server.disabled_tools,
         allowed_import_dirs=config.server.allowed_import_dirs,
         compact_output=config.server.compact_output,
+        config=config,
     )
     if config.server.tools or config.server.disabled_tools:
         parts = []
@@ -1467,6 +1842,50 @@ def run_server(
         logger.info("Registered %d tools (%s)", tool_count, "; ".join(parts))
     else:
         logger.info("Registered %d tools", tool_count)
+
+    # ------------------------------------------------------------------
+    # MCP Resources — expose Zabbix data as browsable resources
+    # ------------------------------------------------------------------
+    default_srv = client_manager.default_server
+
+    if default_srv:
+        @mcp.resource(f"zabbix://{default_srv}/hosts")
+        async def resource_hosts() -> str:
+            """List of all monitored hosts."""
+            result = await asyncio.to_thread(
+                client_manager.call, default_srv, "host.get",
+                {"output": ["hostid", "host", "name", "status"], "sortfield": "name"},
+            )
+            return json.dumps(result, indent=2)
+
+        @mcp.resource(f"zabbix://{default_srv}/problems")
+        async def resource_problems() -> str:
+            """Currently active problems."""
+            result = await asyncio.to_thread(
+                client_manager.call, default_srv, "problem.get",
+                {"output": "extend", "recent": True, "sortfield": ["eventid"], "sortorder": "DESC", "limit": 100},
+            )
+            return json.dumps(result, indent=2)
+
+        @mcp.resource(f"zabbix://{default_srv}/hostgroups")
+        async def resource_hostgroups() -> str:
+            """All host groups."""
+            result = await asyncio.to_thread(
+                client_manager.call, default_srv, "hostgroup.get",
+                {"output": ["groupid", "name"], "sortfield": "name"},
+            )
+            return json.dumps(result, indent=2)
+
+        @mcp.resource(f"zabbix://{default_srv}/templates")
+        async def resource_templates() -> str:
+            """All templates."""
+            result = await asyncio.to_thread(
+                client_manager.call, default_srv, "template.get",
+                {"output": ["templateid", "host", "name"], "sortfield": "name"},
+            )
+            return json.dumps(result, indent=2)
+
+        logger.info("Registered MCP resources (zabbix://%s/...)", default_srv)
 
     # HTTP health endpoint (unauthenticated, returns minimal info only)
     if transport in ("http", "sse"):
@@ -1485,6 +1904,22 @@ def run_server(
                 asgi_app = mcp.streamable_http_app()
             else:
                 asgi_app = mcp.sse_app()
+
+            # Capture client IP in context var for token IP allowlist checks
+            from zabbix_mcp.token_store import current_client_ip as _cip_var, current_token_info as _cti_var
+            _inner_app = asgi_app
+            async def _client_ip_middleware(scope, receive, send):
+                _cti_var.set(None)
+                if scope["type"] in ("http", "websocket") and "client" in scope and scope["client"]:
+                    _cip_var.set(scope["client"][0])
+                else:
+                    _cip_var.set(None)
+                try:
+                    await _inner_app(scope, receive, send)
+                finally:
+                    _cti_var.set(None)
+                    _cip_var.set(None)
+            asgi_app = _client_ip_middleware
 
             # Apply IP allowlist middleware if configured
             if config.server.allowed_hosts:
@@ -1517,8 +1952,61 @@ def run_server(
                 uvicorn_kwargs["ssl_keyfile"] = config.server.tls_key_file
                 logger.info("TLS enabled (cert: %s)", config.server.tls_cert_file)
 
+            # Start admin portal on separate port (if configured)
+            admin_config = getattr(config.server, "_admin_config", None)
+            admin_enabled = False
+            config_path = getattr(config, "_config_path", None)
+
+            if config_path:
+                try:
+                    from zabbix_mcp.admin.config_writer import load_config_document, TOMLKIT_AVAILABLE
+                    if TOMLKIT_AVAILABLE:
+                        doc = load_config_document(config_path)
+                        admin_section = doc.get("admin", {})
+                        admin_enabled = admin_section.get("enabled", False)
+                except Exception:
+                    pass
+
+            if admin_enabled and config_path:
+                admin_port = admin_section.get("port", 9090)
+                # Admin shares host and TLS with MCP server
+                admin_host = host
+
+                from zabbix_mcp.admin.app import AdminApp
+                admin_app_instance = AdminApp(
+                    config=config,
+                    config_path=config_path,
+                    client_manager=client_manager,
+                    token_store=token_store,
+                )
+
+                # Run admin on a separate thread with its own uvicorn
+                import threading
+
+                admin_uvicorn_kwargs: dict[str, Any] = {
+                    "host": admin_host,
+                    "port": admin_port,
+                    "log_level": "warning",
+                    "access_log": False,
+                }
+                # Share TLS certificates with MCP server
+                if config.server.tls_cert_file and config.server.tls_key_file:
+                    admin_uvicorn_kwargs["ssl_certfile"] = config.server.tls_cert_file
+                    admin_uvicorn_kwargs["ssl_keyfile"] = config.server.tls_key_file
+
+                def _run_admin():
+                    import uvicorn as admin_uvicorn
+                    admin_uvicorn.run(admin_app_instance.app, **admin_uvicorn_kwargs)
+
+                admin_thread = threading.Thread(target=_run_admin, daemon=True)
+                admin_thread.start()
+                admin_scheme = "https" if config.server.tls_cert_file else "http"
+                logger.info("Admin portal: %s://%s:%d/", admin_scheme, admin_host, admin_port)
+
+            logger.info("#### Zabbix MCP Server started successfully ####")
             uvicorn.run(asgi_app, **uvicorn_kwargs)
         else:
+            logger.info("#### Zabbix MCP Server started successfully (stdio) ####")
             mcp.run(transport="stdio")
     finally:
         client_manager.close()

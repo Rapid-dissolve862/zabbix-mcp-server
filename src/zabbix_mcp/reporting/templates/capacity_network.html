@@ -1,0 +1,109 @@
+{#
+  Zabbix MCP Server
+  Copyright (C) 2026 initMAX s.r.o.
+
+  This program is free software: you can redistribute it and/or modify it under
+  the terms of the GNU Affero General Public License as published by the Free
+  Software Foundation, version 3.
+
+  This program is distributed in the hope that it will be useful, but WITHOUT
+  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+  FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+  details.
+
+  You should have received a copy of the GNU Affero General Public License
+  along with this program. If not, see <https://www.gnu.org/licenses/>.
+#}
+{% extends "base.html" %}
+
+{% block content %}
+<h1>{{ company }} / Capacity Report</h1>
+
+<h2>General Information</h2>
+<table class="info-table">
+    <tr>
+        <th>Company</th>
+        <td>{{ company }}</td>
+    </tr>
+    <tr>
+        <th>Report Type</th>
+        <td>Network</td>
+    </tr>
+    <tr>
+        <th>Report Period</th>
+        <td>{{ period_from }} &mdash; {{ period_to }}</td>
+    </tr>
+    <tr>
+        <th>Number of Landlines</th>
+        <td>{{ landline_count | default(hosts | length, true) }}</td>
+    </tr>
+</table>
+
+<h2>Average Component Usage per Host</h2>
+
+{% if cpu_rows %}
+<h3>CPU Usage</h3>
+<table>
+    <thead>
+        <tr>
+            <th style="width: 30%;">Endpoint</th>
+            <th style="width: 30%;">Avg. CPU Usage</th>
+            <th style="width: 20%;">Min. CPU Usage</th>
+            <th style="width: 20%;">Max. CPU Usage</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in cpu_rows %}
+        <tr>
+            <td>{{ row.endpoint }}</td>
+            <td>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <div class="bar" style="flex: 1;">
+                        <div class="bar-fill {% if row.avg < 60 %}green{% elif row.avg < 85 %}yellow{% else %}red{% endif %}"
+                             style="width: {{ row.avg }}%;"></div>
+                    </div>
+                    <span>{{ "%.1f"|format(row.avg) }}%</span>
+                </div>
+            </td>
+            <td>{{ "%.1f"|format(row.min) }}%</td>
+            <td>{{ "%.1f"|format(row.max) }}%</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+{% for host in hosts %}
+<h3>{{ host.name }} &mdash; Network Interfaces</h3>
+<table>
+    <thead>
+        <tr>
+            <th style="width: 25%;">Endpoint</th>
+            <th style="width: 20%;">Bandwidth (Mbit/s)</th>
+            <th style="width: 25%;">Avg. CPU Usage</th>
+            <th style="width: 15%;">Min. CPU Usage</th>
+            <th style="width: 15%;">Max. CPU Usage</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for iface in host.interfaces %}
+        <tr>
+            <td>{{ iface.name }}</td>
+            <td>{{ "%.2f"|format(iface.bandwidth_mbps) }}</td>
+            <td>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <div class="bar" style="flex: 1;">
+                        <div class="bar-fill {% if iface.cpu_avg < 60 %}green{% elif iface.cpu_avg < 85 %}yellow{% else %}red{% endif %}"
+                             style="width: {{ iface.cpu_avg }}%;"></div>
+                    </div>
+                    <span>{{ "%.1f"|format(iface.cpu_avg) }}%</span>
+                </div>
+            </td>
+            <td>{{ "%.1f"|format(iface.cpu_min) }}%</td>
+            <td>{{ "%.1f"|format(iface.cpu_max) }}%</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endfor %}
+{% endblock %}

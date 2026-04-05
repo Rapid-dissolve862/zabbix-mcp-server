@@ -1,5 +1,102 @@
 # Changelog
 
+## v1.16 — 2026-04-05
+
+### Added
+
+- **Admin web portal** — full-featured web administration interface on a separate port (default: 9090); initMAX-branded design with dark/light/auto mode, Rubik font, sidebar navigation; manages tokens, users, servers, templates, settings, audit log; all changes written back to config.toml (preserves comments via tomlkit)
+- **Multi-token MCP authentication** — replace single `auth_token` with multiple named tokens (`[tokens.*]` in config.toml), each with independent scopes (tool group filtering), read-only flag, IP restrictions, and expiry; tokens stored as SHA-256 hashes; legacy `auth_token` automatically migrated and persisted
+- **Admin user management** — multiple admin portal users with role-based access control: admin (full access), operator (manage tokens and templates), viewer (read-only); passwords hashed with scrypt; own password change requires current password + confirmation
+- **Graph image export** — new `graph_render` tool fetches rendered Zabbix graph PNGs from the frontend as base64 data URIs; multimodal AI models can display and interpret graphs directly
+- **PDF report generator** — new `report_generate` tool creates professional PDF reports; 4 built-in templates (availability, capacity_host, capacity_network, backup); custom templates via admin portal; configurable logo and branding
+- **Visual template editor** — GrapesJS drag & drop builder with custom Zabbix blocks (Header, Title, Info Table, Host Table, SLA Gauge, Graph); dual mode: Visual (drag & drop) and HTML (raw code); server-side Jinja2 preview with sample data and initMAX logo fallback
+- **Anomaly detection** — new `anomaly_detect` tool performs z-score analysis on trend data across a host group
+- **Capacity forecast** — new `capacity_forecast` tool uses linear regression to predict when a metric reaches a threshold
+- **MCP Resources** — Zabbix data as browsable resources (`zabbix://{server}/hosts`, `/problems`, `/hostgroups`, `/templates`)
+- **Action approval flow** — `action_prepare` + `action_confirm` two-step pattern for write operations with 5-minute confirmation tokens
+- **Tool exposure UI** — chip/box interface for enabling/disabling tool groups globally and per-token; hover tooltips with descriptions; search filtering; globally disabled tools locked in token scopes with ⚠️ warning
+- **File upload** — upload report logo (`/etc/zabbix-mcp/assets/`) and TLS certificates (`/etc/zabbix-mcp/tls/`) via admin portal with validation
+- **Flatpickr date picker** — custom dark/light themed date picker replacing native browser date inputs
+- **Custom number inputs** — +/- button controls for port and rate limit fields
+- **Audit logging** — all admin actions (token/user/server CRUD, login, logout, settings changes) logged to `/var/log/zabbix-mcp/audit.log` (JSON lines); viewer with search, date filters, CSV export
+- **Admin health check** — `GET /health` on admin port returns `{"status":"ok","portal":"admin","version":"1.16"}`
+- **Server config drift detection** — server cards show ⚠️ "Config changed" badge when config differs from live state; restart banner with "Restart Now" button
+- **Custom confirm modals** — all destructive actions use styled modals with blur overlay instead of native browser confirm; restart modal includes progress bar
+- **Startup branding** — `Zabbix MCP Server v1.16 — developed by initMAX s.r.o.` in startup log
+
+- **Per-token Zabbix server binding** — new `allowed_servers` field restricts which Zabbix servers a token can access (`["*"]` = all, or specific server names); enforced in all tool handlers via `check_token_authorization()`
+- **MCP health status indicator** — green/orange/red dot in header with async health check; tooltip shows "MCP is running | Uptime: 2h 15m"
+- **Dashboard async server status** — Zabbix server cards show live connectivity with visible text labels (not just dots); async fetch with **API + token validation** (detects "API online but token invalid")
+- **Restart flow** — clickable "Restart needed" badge opens confirm modal; Docker restart via SIGTERM to PID 1 with progress bar polling until MCP comes back online; works on both Docker and bare-metal (systemctl)
+- **Flash message system** — cookie-based flash messages across redirects for all CRUD operations (create, update, delete, revoke, activate); toast notification with auto-dismiss
+- **Tool allowlist UI** — new `tools` field in Settings > Tool Exposure for positive tool allowlist (complements `disabled_tools` denylist)
+- **Instant CSS tooltips** — replaced native `title` attributes with CSS `data-tooltip` system (100ms hover, no browser delay); supports `tooltip-right` positioning; works on focus/tap for touch devices
+- **Legacy token badge** — "Legacy" badge with tooltip on token list explaining migration path
+- **Token expiry UX** — "Never expires" toggle with auto-fill today+1d on both create and detail pages; flatpickr calendar on all date inputs
+
+### Security
+
+- **Token scopes enforced at runtime** — `check_token_authorization()` centralized helper checks server restrictions, tool prefix scopes (expanded from groups), and per-token `read_only` flag on every tool call
+- **Token IP allowlist enforced** — ASGI middleware captures client IP into context var; `MultiTokenVerifier` passes it to `verify()` for CIDR allowlist checks
+- **Auxiliary tools gated** — `zabbix_raw_api_call`, `graph_render`, `anomaly_detect`, `capacity_forecast`, `report_generate`, `action_prepare` all check `check_token_authorization()`
+- **Action confirmation caller binding** — `action_prepare` stores `caller_token_id`; `action_confirm` rejects tokens from different callers
+- **SSRF prevention hardened** — `/servers/test-new` restricted to admin role; DNS resolution check rejects private/loopback/link-local/reserved IPs; hostname blocklist
+- **Path traversal fix** — template edit/delete path checks use `Path.is_relative_to()` instead of `str.startswith()` (prevents sibling-prefix confusion)
+- **Config writer thread safety** — `threading.RLock` on `load_config_document` and `save_config_document`
+- **Session manager thread safety** — `threading.RLock` on all session operations
+- **Context variable cleanup** — `current_token_info` and `current_client_ip` reset at start of each request and in `try/finally` on error
+- **XSS prevention** — all innerHTML assignments replaced with `textContent` + `createElement`; server name in form action URL-encoded
+- **SVG sanitization hardened** — 5-layer regex (script, event handlers, javascript: URLs, dangerous styles, unsafe data: URIs) with `html.unescape()` pre-processing to prevent entity encoding bypass
+- **Flash cookie validation** — length limit (500 chars) + flash_type whitelist prevents cookie injection XSS
+- **POST rate limiting** — `_PostRateLimitMiddleware` limits 30 POST requests per minute per session
+- **Password complexity** — minimum 10 characters + uppercase letter + digit requirement
+- **Audit log rotation** — auto-rotate at 50 MB with `.1`/`.2` backup scheme
+- **`/api/mcp-status` auth required** — prevents unauthenticated uptime/version disclosure
+- **SandboxedEnvironment for template preview** — prevents SSTI/RCE via Jinja2 template injection
+- **Settings key allowlist** — per-section allowlists prevent arbitrary config key injection
+- **Session cookie** — SameSite=Strict + httponly for CSRF protection
+- **TLS key upload** — saved with `0600` permissions; TLS directory `0750`
+
+### Fixed
+
+- **Dashboard Recent Activity empty** — template variable name mismatch (`recent_audit` → `audit_entries`)
+- **API token exposed in server edit** — changed to `type="password"` with masked hint (`fa0b...4a7`)
+- **Token `created_at` missing** — timestamp now saved on token creation
+- **Template name validation bypass** — client-side check in `submitTemplate()` before hidden form submit
+- **Mobile header overflow** — flex-wrap + shrink on `.header-right`; responsive editor tabs
+- **Tool Exposure side-by-side layout** — `flex-direction: row` on desktop, column on mobile
+- **Upload button height mismatch** — `align-items: center` on upload flex containers
+- **Tool bubble keyboard accessibility** — `tabindex="0"`, `role="button"`, Enter/Space handler
+- **Flatpickr initialization** — selector extended to `.flatpickr-date` class (not just `type="date"`)
+- **Restart detection false positives** — compares old vs new values instead of checking field presence
+- **Docker config.toml read-only** — removed `:ro` from volume mount so admin portal can write changes
+- **Confirm modal Cancel broken** — fixed duplicate `closeModal` function override; added Escape key + overlay click to dismiss
+- **GrapesJS toolbar mobile overflow** — `overflow-x: auto` + `flex-wrap` on panels
+- **Sidebar header border** — changed to `rgba(255,255,255,0.08)` for consistent dark appearance in light mode
+- **Installer pip upgrade** — `pip install --upgrade` ensures version upgrades actually install new code
+- **Legacy token persistence** — migrated `auth_token` written to `[tokens.legacy]` in config.toml
+- **Config writer Docker support** — fallback to direct write when atomic rename fails on Docker bind mounts
+- **Installer password hash corruption** — heredoc shell expansion destroyed `$`-containing scrypt hashes; installer now uses Python writer for safe config writes
+- **Installer code injection** — `_hash_password` shell function interpolated passwords into Python source code; now passes via stdin
+- **Installer `set-admin-password` hash corruption** — sed replacement expanded `$` in scrypt hashes; replaced with Python-based config writer
+- **Report generation crash** — `report_generate` tool passed `period` string but data fetchers expected `period_from`/`period_to` epoch timestamps; now converts period to epochs
+- **Systemd blocks admin portal writes** — `ProtectSystem=strict` with `ReadWritePaths` missing `/etc/zabbix-mcp`; admin portal config writes, uploads, and TLS operations failed silently on bare-metal installs
+- **Server edit 500 error on race condition** — `server_edit` POST returned no response when server was deleted between GET and POST
+- **Token ID collision** — two tokens with similar names (e.g. "CI Pipeline" and "CI_Pipeline") produced the same config key, silently overwriting the first
+- **Docker volume persistence** — logo and TLS uploads stored in container filesystem were lost on recreation; added named volumes for assets and TLS
+- **Installer re-exec lost CLI flags** — `--with-reporting` and `--without-reporting` flags dropped during git-pull re-execution
+- **Dashboard audit target empty** — template used `entry.target` but audit entries have `target_type` + `target_id` fields
+- **Installer password validation incomplete** — `set-admin-password` prompt promised uppercase + digit validation but only checked length
+- **Config directory world-readable** — `/etc/zabbix-mcp` created with 755; now 750 with `zabbix-mcp` ownership
+- **Installer `git reset` to wrong branch** — update always reset to `origin/main` regardless of current branch
+- **Rate limiter memory leak** — `_PostRateLimitMiddleware` and `LoginRateLimiter` dicts grew unbounded; added periodic cleanup
+- **Audit log encoding** — `open()` without `encoding="utf-8"` could fail on non-UTF-8 locales
+- **Template preview path traversal** — GET preview path missing `is_relative_to()` validation present in edit/delete paths
+- **Token create JS error** — `toggleExpiry` called on null element after successful token creation replaced the form DOM
+- **Template preview iframe click block** — hidden iframe intercepted pointer events after closing preview modal; now resets iframe src on close
+- **Server create silent rejection** — invalid name/URL redirected without error message; now shows flash notification
+- **User create form data lost** — validation errors cleared username and role selection; now preserves form state
+
 ## v1.15 — 2026-04-04
 
 ### Fixed

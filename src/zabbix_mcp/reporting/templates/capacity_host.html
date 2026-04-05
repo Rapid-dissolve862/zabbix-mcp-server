@@ -1,0 +1,75 @@
+{#
+  Zabbix MCP Server
+  Copyright (C) 2026 initMAX s.r.o.
+
+  This program is free software: you can redistribute it and/or modify it under
+  the terms of the GNU Affero General Public License as published by the Free
+  Software Foundation, version 3.
+
+  This program is distributed in the hope that it will be useful, but WITHOUT
+  ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+  FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+  details.
+
+  You should have received a copy of the GNU Affero General Public License
+  along with this program. If not, see <https://www.gnu.org/licenses/>.
+#}
+{% extends "base.html" %}
+
+{% block content %}
+<h1>{{ company }} / Capacity Report</h1>
+
+<h2>General Information</h2>
+<table class="info-table">
+    <tr>
+        <th>Company</th>
+        <td>{{ company }}</td>
+    </tr>
+    <tr>
+        <th>Report Type</th>
+        <td>Host</td>
+    </tr>
+    <tr>
+        <th>Report Period</th>
+        <td>{{ period_from }} &mdash; {{ period_to }}</td>
+    </tr>
+    <tr>
+        <th>Number of Hosts</th>
+        <td>{{ hosts | length }}</td>
+    </tr>
+</table>
+
+<h2>Average Component Usage per Host</h2>
+
+{% for metric in metrics %}
+<h3>{{ metric.label }}</h3>
+<table>
+    <thead>
+        <tr>
+            <th style="width: 30%;">Endpoint</th>
+            <th style="width: 30%;">Avg Usage</th>
+            <th style="width: 20%;">Min Usage</th>
+            <th style="width: 20%;">Max Usage</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in metric.rows %}
+        <tr>
+            <td>{{ row.endpoint }}</td>
+            <td>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <div class="bar" style="flex: 1;">
+                        <div class="bar-fill {% if row.avg < 60 %}green{% elif row.avg < 85 %}yellow{% else %}red{% endif %}"
+                             style="width: {{ row.avg }}%;"></div>
+                    </div>
+                    <span>{{ "%.1f"|format(row.avg) }}%</span>
+                </div>
+            </td>
+            <td>{{ "%.1f"|format(row.min) }}%</td>
+            <td>{{ "%.1f"|format(row.max) }}%</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endfor %}
+{% endblock %}

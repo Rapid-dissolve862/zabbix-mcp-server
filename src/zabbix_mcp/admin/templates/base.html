@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Zabbix MCP Server{% endblock %} — Admin</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/flatpickr.min.css">
+    <link rel="stylesheet" href="/static/grapes.min.css">
+    <script src="/static/htmx.min.js"></script>
+    <script src="/static/flatpickr.min.js"></script>
+</head>
+<body hx-indicator="#loader">
+    <!-- Sidebar -->
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <a href="/" class="logo" style="text-decoration:none;">
+                <img src="/static/logo-symbol-white.svg" alt="initMAX" class="logo-dark-theme" style="height: 28px;">
+                <img src="/static/logo-symbol-color.svg" alt="initMAX" class="logo-light-theme" style="height: 28px;">
+                <span class="logo-text">Zabbix MCP</span>
+            </a>
+        </div>
+        <ul class="nav-menu">
+            <li><a href="/" class="nav-item {% if active == 'dashboard' %}active{% endif %}">
+                <span class="nav-icon">&#x1F4CA;</span> Dashboard</a></li>
+            <li><a href="/tokens" class="nav-item {% if active == 'tokens' %}active{% endif %}">
+                <span class="nav-icon">&#x1F511;</span> MCP Tokens</a></li>
+            <li><a href="/servers" class="nav-item {% if active == 'servers' %}active{% endif %}">
+                <span class="nav-icon">&#x1F5A5;</span> Zabbix Servers</a></li>
+            <li><a href="/users" class="nav-item {% if active == 'users' %}active{% endif %}">
+                <span class="nav-icon">&#x1F465;</span> Admin Users</a></li>
+            <li><a href="/templates" class="nav-item {% if active == 'templates' %}active{% endif %}">
+                <span class="nav-icon">&#x1F4C4;</span> Report Templates</a></li>
+            <li><a href="/settings" class="nav-item {% if active == 'settings' %}active{% endif %}">
+                <span class="nav-icon">&#x2699;&#xFE0F;</span> Settings</a></li>
+            <li><a href="/audit" class="nav-item {% if active == 'audit' %}active{% endif %}">
+                <span class="nav-icon">&#x1F4CB;</span> Audit Log</a></li>
+        </ul>
+        <div class="sidebar-footer">
+            <span class="version">v{{ version }} &middot; <a href="https://github.com/initMAX/zabbix-mcp-server" target="_blank">Documentation</a></span>
+            <span class="copyright"><a href="https://www.initmax.com" target="_blank">&copy; initMAX s.r.o.</a></span>
+        </div>
+    </nav>
+
+    <!-- Header -->
+    <header class="header">
+        <button class="hamburger" onclick="toggleSidebar()" aria-label="Toggle sidebar">&#9776;</button>
+        <div class="header-center">
+            <span class="mcp-status-dot checking tooltip-right" id="mcp-status-dot" data-tooltip="Checking MCP..."></span>
+            <span class="text-sm text-muted">MCP available at</span>
+            <code class="monospace" style="font-size: 0.85rem; margin-left: 6px;">{{ server_name }}</code>
+            {% if restart_needed %}
+            <span class="restart-badge" style="cursor:pointer;" onclick="triggerRestart()" title="Click to restart MCP server">&#x26A0;&#xFE0F; Restart needed</span>
+            {% endif %}
+        </div>
+        <div class="header-right">
+            <div class="theme-switcher">
+                <button class="theme-btn" onclick="setTheme('light')" title="Light">&#x2600;&#xFE0F;</button>
+                <button class="theme-btn" onclick="setTheme('auto')" title="Auto">&#x1F5A5;&#xFE0F;</button>
+                <button class="theme-btn" onclick="setTheme('dark')" title="Dark">&#x1F319;</button>
+            </div>
+            <div class="user-menu">
+                <span class="user-name">{{ current_user }}</span>
+                <form method="post" action="/logout" style="display:inline">
+                    <button type="submit" class="btn btn-ghost btn-sm">Logout</button>
+                </form>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main content -->
+    <main class="content">
+        {% if flash_message %}
+        <div class="toast toast-{{ flash_type }}" id="toast">
+            {{ flash_message }}
+            <button onclick="this.parentElement.remove()" aria-label="Dismiss">&times;</button>
+        </div>
+        {% endif %}
+
+        <!-- HTMX loading indicator -->
+        <div class="htmx-indicator" id="loader"></div>
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Global confirm modal -->
+    <div class="modal-overlay" id="confirm-modal" style="display:none;" onclick="if(event.target===this)closeModal();">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 id="confirm-title">Confirm</h3>
+            </div>
+            <div class="modal-body">
+                <p id="confirm-message">Are you sure?</p>
+                <div id="confirm-progress" style="display:none;">
+                    <div class="progress-bar"><div class="progress-fill" id="confirm-progress-fill"></div></div>
+                    <p class="text-sm text-muted" id="confirm-status">Processing...</p>
+                </div>
+            </div>
+            <div class="modal-footer" id="confirm-buttons">
+                <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+                <button class="btn btn-danger" id="confirm-action-btn" onclick="executeConfirm()">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    var _confirmCallback = null;
+
+    function showConfirm(title, message, btnText, btnClass, callback) {
+        document.getElementById('confirm-title').textContent = title;
+        document.getElementById('confirm-message').textContent = message;
+        var btn = document.getElementById('confirm-action-btn');
+        btn.textContent = btnText || 'Confirm';
+        btn.className = 'btn ' + (btnClass || 'btn-danger');
+        document.getElementById('confirm-progress').style.display = 'none';
+        document.getElementById('confirm-buttons').style.display = 'flex';
+        document.getElementById('confirm-modal').style.display = 'flex';
+        _confirmCallback = callback;
+    }
+
+    function showProgress(title, message) {
+        document.getElementById('confirm-title').textContent = title;
+        document.getElementById('confirm-message').style.display = 'none';
+        document.getElementById('confirm-buttons').style.display = 'none';
+        document.getElementById('confirm-progress').style.display = 'block';
+        document.getElementById('confirm-status').textContent = message;
+        document.getElementById('confirm-progress-fill').style.width = '0%';
+        document.getElementById('confirm-modal').style.display = 'flex';
+        // Animate progress
+        var fill = document.getElementById('confirm-progress-fill');
+        fill.style.transition = 'width 3s ease';
+        setTimeout(function() { fill.style.width = '80%'; }, 50);
+    }
+
+    function closeModal() {
+        document.getElementById('confirm-modal').style.display = 'none';
+        document.getElementById('confirm-message').style.display = 'block';
+        document.getElementById('confirm-buttons').style.display = 'flex';
+        document.getElementById('confirm-progress').style.display = 'none';
+        _confirmCallback = null;
+    }
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeModal();
+    });
+
+    function executeConfirm() {
+        if (_confirmCallback) _confirmCallback();
+    }
+
+    function confirmDelete(name, formId) {
+        showConfirm('Delete ' + name, 'This action cannot be undone. Are you sure?', 'Delete', 'btn-danger', function() {
+            document.getElementById(formId).submit();
+            closeModal();
+        });
+    }
+
+    function triggerRestart() { confirmRestart(); }
+    function confirmRestart() {
+        showConfirm('Restart MCP Server', 'The MCP server will be restarted. Active connections will be interrupted.', 'Restart Now', 'btn-warning', function() {
+            showProgress('Restarting...', 'Sending restart signal...');
+            var fill = document.getElementById('confirm-progress-fill');
+            var status = document.getElementById('confirm-status');
+            fill.style.transition = 'width 1s ease';
+            fill.style.width = '20%';
+
+            fetch('/servers/restart', {method: 'POST'}).then(function(r) {
+                return r.json();
+            }).then(function(data) {
+                fill.style.width = '40%';
+                status.textContent = 'Restart signal sent. Waiting for MCP to come back...';
+                // Poll health check until MCP is back
+                var attempts = 0;
+                var maxAttempts = 30;
+                function pollHealth() {
+                    attempts++;
+                    var pct = 40 + Math.min(attempts * 2, 50);
+                    fill.style.width = pct + '%';
+                    status.textContent = 'Waiting for MCP... (' + attempts + '/' + maxAttempts + ')';
+                    fetch('/api/mcp-status').then(function(r) {
+                        return r.json();
+                    }).then(function(d) {
+                        if (d.status === 'ok') {
+                            fill.style.width = '100%';
+                            status.textContent = 'MCP is back online! Reloading...';
+                            status.style.color = 'var(--color-success)';
+                            setTimeout(function() { window.location.reload(); }, 1000);
+                        } else if (attempts < maxAttempts) {
+                            setTimeout(pollHealth, 2000);
+                        } else {
+                            status.textContent = 'MCP did not come back. Check server logs.';
+                            status.style.color = 'var(--color-danger)';
+                        }
+                    }).catch(function() {
+                        if (attempts < maxAttempts) {
+                            setTimeout(pollHealth, 2000);
+                        } else {
+                            status.textContent = 'MCP did not come back. Check server logs.';
+                            status.style.color = 'var(--color-danger)';
+                        }
+                    });
+                }
+                setTimeout(pollHealth, 3000);
+            }).catch(function() {
+                status.textContent = 'Failed to send restart signal.';
+                status.style.color = 'var(--color-danger)';
+            });
+        });
+    }
+    // Theme management: light / auto / dark
+    function setTheme(mode) {
+        localStorage.setItem('theme', mode);
+        applyTheme();
+    }
+    function applyTheme() {
+        var saved = localStorage.getItem('theme') || 'auto';
+        var resolved;
+        if (saved === 'auto') {
+            resolved = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        } else {
+            resolved = saved;
+        }
+        document.documentElement.setAttribute('data-theme', resolved);
+        document.querySelectorAll('.theme-btn').forEach(function(btn) { btn.classList.remove('active'); });
+        var idx = {light: 0, auto: 1, dark: 2}[saved];
+        if (idx !== undefined) {
+            document.querySelectorAll('.theme-switcher .theme-btn, .theme-switcher-login .theme-btn').forEach(function(group) {
+                // handled per-group below
+            });
+            var btns = document.querySelectorAll('.theme-btn');
+            // Mark active across all switcher instances
+            btns.forEach(function(btn, i) { if (i % 3 === idx) btn.classList.add('active'); });
+        }
+    }
+    applyTheme();
+    window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', function() {
+        if ((localStorage.getItem('theme') || 'auto') === 'auto') applyTheme();
+    });
+
+    // Sidebar toggle (mobile)
+    function toggleSidebar() {
+        var sb = document.getElementById('sidebar');
+        if (window.innerWidth <= 768) {
+            sb.classList.toggle('open');
+        } else {
+            sb.classList.toggle('collapsed');
+        }
+    }
+
+    // Close sidebar on outside click (mobile)
+    document.addEventListener('click', function(e) {
+        if (window.innerWidth <= 768) {
+            var sb = document.getElementById('sidebar');
+            if (sb.classList.contains('open') && !sb.contains(e.target) && !e.target.classList.contains('hamburger')) {
+                sb.classList.remove('open');
+            }
+        }
+    });
+
+    // Copy to clipboard
+    function copyToClipboard(text, btn) {
+        navigator.clipboard.writeText(text).then(function() {
+            var orig = btn.innerHTML;
+            btn.textContent = '\u2713';
+            setTimeout(function() { btn.innerHTML = orig; }, 2000);
+        });
+    }
+
+    // Initialize flatpickr on all date inputs (native type="date" + class="flatpickr-date")
+    document.querySelectorAll('input[type="date"]').forEach(function(el) {
+        el.type = 'text'; // Remove native picker
+    });
+    document.querySelectorAll('input[type="date"], .flatpickr-date').forEach(function(el) {
+        if (el._flatpickr) return; // already initialized
+        flatpickr(el, {
+            dateFormat: 'Y-m-d',
+            allowInput: true,
+            theme: document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark',
+        });
+    });
+
+    // Custom number input +/- buttons
+    function initNumberInputs() {
+        document.querySelectorAll('.number-input-group').forEach(function(group) {
+            var input = group.querySelector('input[type="number"]');
+            var minus = group.querySelector('.num-minus');
+            var plus = group.querySelector('.num-plus');
+            if (minus) minus.addEventListener('click', function() {
+                var step = parseInt(input.step) || 1;
+                var min = parseInt(input.min);
+                var val = parseInt(input.value) || 0;
+                if (isNaN(min) || val - step >= min) input.value = val - step;
+                input.dispatchEvent(new Event('change'));
+            });
+            if (plus) plus.addEventListener('click', function() {
+                var step = parseInt(input.step) || 1;
+                var max = parseInt(input.max);
+                var val = parseInt(input.value) || 0;
+                if (isNaN(max) || val + step <= max) input.value = val + step;
+                input.dispatchEvent(new Event('change'));
+            });
+        });
+    }
+    document.addEventListener('DOMContentLoaded', initNumberInputs);
+
+    // Auto-dismiss toasts
+    setTimeout(function() {
+        var toast = document.getElementById('toast');
+        if (toast) toast.remove();
+    }, 5000);
+
+    // Modal helpers (for non-confirm modals like delete confirmations on detail pages)
+    function openModal(id) {
+        document.getElementById(id).hidden = false;
+    }
+    // closeModal without args = close confirm modal (defined above)
+    // closeModal with id = close specific modal by id
+    var _closeModalOrig = closeModal;
+    closeModal = function(id) {
+        if (id) {
+            document.getElementById(id).hidden = true;
+        } else {
+            _closeModalOrig();
+        }
+    };
+
+    // MCP health check — runs on page load, updates status dot
+    (function() {
+        var dot = document.getElementById('mcp-status-dot');
+        if (!dot) return;
+        fetch('/api/mcp-status')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.status === 'ok') {
+                    dot.className = 'mcp-status-dot ok tooltip-right';
+                    dot.dataset.tooltip = 'MCP is running | Uptime: ' + (data.uptime || '?');
+                } else {
+                    dot.className = 'mcp-status-dot error tooltip-right';
+                    dot.dataset.tooltip = 'MCP is not responding: ' + (data.error || 'unknown');
+                }
+            })
+            .catch(function() {
+                dot.className = 'mcp-status-dot error tooltip-right';
+                dot.dataset.tooltip = 'MCP health check failed';
+            });
+    })();
+    </script>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

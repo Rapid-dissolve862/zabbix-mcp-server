@@ -20,7 +20,7 @@ FROM python:3.13.5-slim AS builder
 WORKDIR /build
 COPY . .
 RUN python -m venv /opt/zabbix-mcp/venv \
-    && /opt/zabbix-mcp/venv/bin/pip install --no-cache-dir --quiet .
+    && /opt/zabbix-mcp/venv/bin/pip install --no-cache-dir --quiet ".[reporting]"
 
 FROM python:3.13.5-slim
 
@@ -30,9 +30,18 @@ LABEL org.opencontainers.image.description="MCP server for the complete Zabbix A
 LABEL org.opencontainers.image.source="https://github.com/initMAX/zabbix-mcp-server"
 LABEL org.opencontainers.image.licenses="AGPL-3.0-only"
 
+# System libs for weasyprint PDF rendering
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf2.0-0 \
+    libffi8 shared-mime-info \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN useradd --system --shell /usr/sbin/nologin --home-dir /opt/zabbix-mcp zabbix-mcp \
-    && mkdir -p /var/log/zabbix-mcp \
-    && chown zabbix-mcp:zabbix-mcp /var/log/zabbix-mcp
+    && mkdir -p /var/log/zabbix-mcp /etc/zabbix-mcp \
+    && mkdir -p /etc/zabbix-mcp/assets /etc/zabbix-mcp/tls \
+    && chown zabbix-mcp:zabbix-mcp /var/log/zabbix-mcp /etc/zabbix-mcp \
+    && chown zabbix-mcp:zabbix-mcp /etc/zabbix-mcp/assets /etc/zabbix-mcp/tls \
+    && chmod 750 /etc/zabbix-mcp/tls
 
 COPY --from=builder /opt/zabbix-mcp/venv /opt/zabbix-mcp/venv
 
@@ -40,6 +49,7 @@ ENV PATH="/opt/zabbix-mcp/venv/bin:$PATH"
 
 USER zabbix-mcp
 EXPOSE 8080
+EXPOSE 9090
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health')"]

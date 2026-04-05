@@ -33,6 +33,7 @@ DEFAULT_PORT=8080
 PYTHON_BIN=""
 DRY_RUN=false
 AUTO_INSTALL_PYTHON=false
+INSTALL_REPORTING=auto
 
 # --------------------------------------------------------------------------- #
 # Read port from config.toml (falls back to DEFAULT_PORT)
@@ -124,22 +125,27 @@ Usage:
   sudo ./deploy/install.sh [COMMAND] [OPTIONS]
 
 Commands:
-  install       Fresh installation (default if no command given)
-  update        Update existing installation, preserve config
-  uninstall     Complete removal of the server and all its data
+  install             Fresh installation (default if no command given)
+  update              Update existing installation, preserve config
+  uninstall           Complete removal of the server and all its data
+  set-admin-password  Reset the admin portal password
+  generate-token      Generate a new MCP bearer token and add it to config.toml
 
 Options:
   --dry-run           Check prerequisites without installing anything
-  --install-python    Automatically install Python if no suitable version found
-  -h, --help          Show this help message
+  --install-python      Automatically install Python if no suitable version found
+  --without-reporting   Skip PDF reporting dependencies (weasyprint, jinja2)
+  --with-reporting      Force-install PDF reporting even on update without it
+  -h, --help            Show this help message
 
 Examples:
-  sudo ./deploy/install.sh                       # fresh install
-  sudo ./deploy/install.sh update                # update in place
+  sudo ./deploy/install.sh                       # fresh install (includes reporting)
+  sudo ./deploy/install.sh --without-reporting   # fresh install without PDF reports
+  sudo ./deploy/install.sh update                # update (keeps reporting if installed)
+  sudo ./deploy/install.sh update --with-reporting  # update + add PDF reports
   sudo ./deploy/install.sh uninstall             # complete removal
+  sudo ./deploy/install.sh generate-token claude  # generate MCP bearer token
   sudo ./deploy/install.sh --dry-run             # verify prerequisites
-  sudo ./deploy/install.sh --install-python      # auto-install Python if needed
-  sudo ./deploy/install.sh install --dry-run     # dry-run for fresh install
 
 What it does:
   install:
@@ -525,7 +531,7 @@ ProtectKernelModules=yes
 ProtectControlGroups=yes
 RestrictSUIDSGID=yes
 RestrictNamespaces=yes
-ReadWritePaths=/var/log/zabbix-mcp
+ReadWritePaths=/var/log/zabbix-mcp /etc/zabbix-mcp
 
 [Install]
 WantedBy=multi-user.target
@@ -573,11 +579,45 @@ install_package() {
     fi
 
     spin "Upgrading pip" "$INSTALL_DIR/venv/bin/pip" install --upgrade pip --quiet
-    spin "Installing zabbix-mcp-server from ${SCRIPT_DIR}" "$INSTALL_DIR/venv/bin/pip" install "$SCRIPT_DIR" --quiet
+    spin "Installing zabbix-mcp-server from ${SCRIPT_DIR}" "$INSTALL_DIR/venv/bin/pip" install --upgrade "$SCRIPT_DIR" --quiet
+
+    # Resolve "auto" reporting flag:
+    #   install: default ON (include reporting)
+    #   update:  detect whether reporting is already installed
+    if [[ "$INSTALL_REPORTING" == "auto" ]]; then
+        if [[ -d "$INSTALL_DIR/venv" ]] && "$INSTALL_DIR/venv/bin/python" -c "import weasyprint" 2>/dev/null; then
+            INSTALL_REPORTING=true   # already installed → keep it
+        elif [[ "$COMMAND" == "install" ]]; then
+            INSTALL_REPORTING=true   # fresh install → include by default
+        else
+            INSTALL_REPORTING=false  # update without existing reporting → don't add
+        fi
+    fi
+
+    # Install reporting dependencies
+    if [[ "$INSTALL_REPORTING" == "true" ]]; then
+        info "Installing PDF reporting system libraries..."
+        if [[ -f /etc/redhat-release ]]; then
+            dnf install -y cairo pango gdk-pixbuf2 libffi-devel &>/dev/null || \
+                warn "Some system libraries for reporting may be missing. Install: dnf install cairo pango gdk-pixbuf2"
+        elif [[ -f /etc/debian_version ]]; then
+            apt-get update -qq &>/dev/null || true
+            apt-get install -y libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf2.0-0 libffi-dev &>/dev/null || \
+                warn "Some system libraries for reporting may be missing. Install: apt-get install libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf2.0-0"
+        fi
+        spin "Installing PDF reporting dependencies" "$INSTALL_DIR/venv/bin/pip" install --upgrade "$SCRIPT_DIR[reporting]" --quiet
+    fi
 
     local version
     version=$("$INSTALL_DIR/venv/bin/zabbix-mcp-server" --version 2>&1 || true)
     ok "Installed: $version"
+
+    # Check if reporting is available
+    if "$INSTALL_DIR/venv/bin/python" -c "import weasyprint, jinja2" 2>/dev/null; then
+        ok "PDF reporting: enabled"
+    else
+        info "PDF reporting: disabled (install with --with-reporting to enable)"
+    fi
 }
 
 # --------------------------------------------------------------------------- #
@@ -657,7 +697,10 @@ do_install() {
     # Directories
     info "Creating directories..."
     mkdir -p "$INSTALL_DIR" "$CONFIG_DIR" "$LOG_DIR"
+    mkdir -p "$CONFIG_DIR/assets" "$CONFIG_DIR/tls"
     chown "$SERVICE_USER:$SERVICE_USER" "$LOG_DIR"
+    chown "$SERVICE_USER:$SERVICE_USER" "$CONFIG_DIR" "$CONFIG_DIR/assets" "$CONFIG_DIR/tls"
+    chmod 750 "$CONFIG_DIR" "$CONFIG_DIR/tls"
     touch "$LOG_DIR/server.log"
     chown "$SERVICE_USER:$SERVICE_USER" "$LOG_DIR/server.log"
 
@@ -691,6 +734,10 @@ do_install() {
     active_host=$(get_configured_host)
     check_firewall_and_selinux "$active_port"
 
+    # Setup admin portal (generate password, write [admin] section)
+    setup_admin
+    migrate_legacy_token
+
     echo
     ok "=== Installation complete ==="
     echo
@@ -703,8 +750,9 @@ do_install() {
     echo "  6. Health check:     curl http://localhost:$active_port/health"
     echo
     echo "  Endpoints (from config.toml — ${active_host}:${active_port}):"
-    echo "    MCP endpoint:  http://localhost:$active_port/mcp"
-    echo "    Health check:  http://localhost:$active_port/health"
+    echo "    MCP endpoint:   http://localhost:$active_port/mcp"
+    echo "    Health check:   http://localhost:$active_port/health"
+    echo "    Admin portal:   http://localhost:9090"
     echo
     echo "  Changelog:    https://github.com/initMAX/zabbix-mcp-server/blob/main/CHANGELOG.md"
     echo "  (new features, security fixes, new config options)"
@@ -751,21 +799,23 @@ do_update() {
                 ok "Git pull: $pull_output"
             else
                 warn "Fast-forward pull failed (diverged history or local changes)."
-                info "Trying: git fetch + reset to origin/main..."
+                local current_branch
+                current_branch=$(git -C "$SCRIPT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
+                info "Trying: git fetch + reset to origin/${current_branch}..."
                 if git -C "$SCRIPT_DIR" fetch origin 2>&1 && \
-                   git -C "$SCRIPT_DIR" reset --hard origin/main 2>&1; then
-                    ok "Repository synced to latest origin/main."
+                   git -C "$SCRIPT_DIR" reset --hard "origin/${current_branch}" 2>&1; then
+                    ok "Repository synced to latest origin/${current_branch}."
                     need_reexec=true
                 else
                     warn "Git sync failed — continuing with current local version."
-                    warn "To fix manually: cd $SCRIPT_DIR && git fetch origin && git reset --hard origin/main"
+                    warn "To fix manually: cd $SCRIPT_DIR && git fetch origin && git reset --hard origin/${current_branch}"
                 fi
             fi
             # Re-exec with updated script to ensure new code runs new installer
             if $need_reexec && [[ -z "${WMCP_REEXEC:-}" ]]; then
                 info "Re-executing installer from updated source..."
                 export WMCP_REEXEC=1
-                exec "$SCRIPT_DIR/deploy/install.sh" update
+                exec "$SCRIPT_DIR/deploy/install.sh" "${ORIGINAL_ARGS[@]}"
             fi
         else
             warn "git is not installed — skipping pull. Using existing source in $SCRIPT_DIR."
@@ -795,6 +845,10 @@ do_update() {
 
     # Check and fix file permissions (catches issues from failed earlier installs)
     check_permissions
+
+    # Setup admin portal if not yet configured
+    setup_admin
+    migrate_legacy_token
 
     # Restart service if running
     if command -v systemctl &>/dev/null; then
@@ -912,9 +966,331 @@ do_uninstall() {
 }
 
 # --------------------------------------------------------------------------- #
+# Admin portal setup — generate password, write [admin] section
+# --------------------------------------------------------------------------- #
+_generate_password() {
+    # Generate a random 16-char password using Python (always available after install)
+    "$INSTALL_DIR/venv/bin/python" -c "
+import secrets, string
+alphabet = string.ascii_letters + string.digits
+print(''.join(secrets.choice(alphabet) for _ in range(16)))
+"
+}
+
+_hash_password() {
+    local password="$1"
+    # Pass password via stdin to avoid shell/Python injection via special characters
+    printf '%s' "$password" | "$INSTALL_DIR/venv/bin/python" -c "
+import hashlib, os, sys
+password = sys.stdin.read()
+salt = os.urandom(16)
+derived = hashlib.scrypt(password.encode(), salt=salt, n=16384, r=8, p=1, dklen=32)
+print(f'scrypt:16384:8:1\${salt.hex()}\${derived.hex()}')
+"
+}
+
+setup_admin() {
+    # Check if [admin] section already exists in config
+    local config_file="$CONFIG_DIR/config.toml"
+    if [[ ! -f "$config_file" ]]; then
+        return
+    fi
+
+    if grep -q '^\[admin\]' "$config_file" 2>/dev/null; then
+        # [admin] section exists — check if users are configured
+        if grep -q '^\[admin\.users\.' "$config_file" 2>/dev/null; then
+            ok "Admin portal already configured"
+            return
+        fi
+    fi
+
+    info "Setting up admin portal..."
+
+    # Generate admin password
+    local admin_password
+    admin_password=$(_generate_password)
+    local password_hash
+    password_hash=$(_hash_password "$admin_password")
+
+    # Add admin user to config.toml
+    # Use Python to safely write the hash (contains $ which must not be shell-expanded)
+    "$INSTALL_DIR/venv/bin/python" -c "
+import sys
+config_file = sys.argv[1]
+password_hash = sys.argv[2]
+has_admin = sys.argv[3] == 'true'
+
+with open(config_file, 'r') as f:
+    content = f.read()
+
+if has_admin:
+    content += '''
+[admin.users.admin]
+password_hash = \"''' + password_hash + '''\"
+role = \"admin\"
+'''
+else:
+    content += '''
+# ---------------------------------------------------------------------------
+# Admin Portal (auto-generated by installer)
+# ---------------------------------------------------------------------------
+[admin]
+enabled = true
+port = 9090
+
+[admin.users.admin]
+password_hash = \"''' + password_hash + '''\"
+role = \"admin\"
+'''
+
+with open(config_file, 'w') as f:
+    f.write(content)
+" "$config_file" "$password_hash" "$(grep -q '^\[admin\]' "$config_file" 2>/dev/null && echo true || echo false)"
+
+    chown "$SERVICE_USER:$SERVICE_USER" "$config_file"
+
+    echo
+    echo -e "  \e[1;32m╔══════════════════════════════════════════════════╗\e[0m"
+    echo -e "  \e[1;32m║          Admin Portal Credentials                ║\e[0m"
+    echo -e "  \e[1;32m╠══════════════════════════════════════════════════╣\e[0m"
+    echo -e "  \e[1;32m║\e[0m  URL:      http://localhost:9090                  \e[1;32m║\e[0m"
+    echo -e "  \e[1;32m║\e[0m  Username: \e[1madmin\e[0m                                 \e[1;32m║\e[0m"
+    echo -e "  \e[1;32m║\e[0m  Password: \e[1m$admin_password\e[0m                      \e[1;32m║\e[0m"
+    echo -e "  \e[1;32m║\e[0m                                                  \e[1;32m║\e[0m"
+    echo -e "  \e[1;32m║\e[0m  Save this password — it will not be shown again \e[1;32m║\e[0m"
+    echo -e "  \e[1;32m╚══════════════════════════════════════════════════╝\e[0m"
+    echo
+}
+
+migrate_legacy_token() {
+    # Migrate auth_token to [tokens.legacy] if it exists and no tokens defined
+    local config_file="$CONFIG_DIR/config.toml"
+    if [[ ! -f "$config_file" ]]; then
+        return
+    fi
+
+    # Check if auth_token exists and no [tokens.*] sections
+    if grep -qE '^\s*auth_token\s*=' "$config_file" && ! grep -q '^\[tokens\.' "$config_file"; then
+        local auth_token
+        auth_token=$(grep -E '^\s*auth_token\s*=' "$config_file" | head -1 | sed 's/.*=\s*//' | tr -d ' "'\''')
+        if [[ -n "$auth_token" && "$auth_token" != '${'* ]]; then
+            info "Migrating legacy auth_token to [tokens.legacy]..."
+            local token_hash
+            # Pass token via stdin to avoid shell injection
+            token_hash=$(printf '%s' "$auth_token" | "$INSTALL_DIR/venv/bin/python" -c "
+import hashlib, sys
+token = sys.stdin.read()
+print(f'sha256:{hashlib.sha256(token.encode()).hexdigest()}')
+")
+            cat >> "$config_file" << 'TOKEN'
+
+# ---------------------------------------------------------------------------
+# MCP Tokens (migrated from auth_token by installer)
+# ---------------------------------------------------------------------------
+[tokens.legacy]
+name = "Legacy config.toml token"
+TOKEN
+            # Append token_hash via echo (contains no shell-special chars — hex only)
+            echo "token_hash = \"$token_hash\"" >> "$config_file"
+            cat >> "$config_file" << 'TOKEN'
+scopes = ["*"]
+read_only = false
+is_legacy = true
+TOKEN
+            ok "Legacy auth_token migrated to [tokens.legacy]"
+        fi
+    fi
+}
+
+do_generate_token() {
+    info "=== Zabbix MCP Server - Generate MCP Token ==="
+    echo
+
+    if [[ ! -d "$INSTALL_DIR/venv" ]]; then
+        error "No installation found at $INSTALL_DIR"
+        exit 1
+    fi
+
+    local config_file="$CONFIG_DIR/config.toml"
+    local token_name=""
+
+    # Accept name as argument or prompt
+    if [[ -n "${1:-}" ]]; then
+        token_name="$1"
+    elif [[ -t 0 ]]; then
+        read -rp "$(echo -e '\e[1;34m>>>\e[0m') Token name (e.g. claude, ci_pipeline): " token_name
+    fi
+
+    if [[ -z "$token_name" ]]; then
+        error "Token name is required."
+        echo "Usage: sudo ./deploy/install.sh generate-token <name>"
+        exit 1
+    fi
+
+    # Sanitize name for TOML key
+    local token_id
+    token_id=$(echo "$token_name" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_]/_/g' | cut -c1-50)
+    if [[ ! "$token_id" =~ ^[a-z] ]]; then
+        token_id="t_${token_id}"
+    fi
+
+    # Generate token + hash using Python
+    local result
+    result=$("$INSTALL_DIR/venv/bin/python" -c "
+import secrets, hashlib
+raw = 'zmcp_' + secrets.token_hex(32)
+hash_str = 'sha256:' + hashlib.sha256(raw.encode()).hexdigest()
+print(raw)
+print(hash_str)
+")
+    local raw_token
+    raw_token=$(echo "$result" | head -1)
+    local token_hash
+    token_hash=$(echo "$result" | tail -1)
+
+    # Write to config.toml if it exists
+    if [[ -f "$config_file" ]]; then
+        # Check for collision
+        if grep -q "^\[tokens\.${token_id}\]" "$config_file" 2>/dev/null; then
+            error "Token '${token_id}' already exists in config.toml"
+            exit 1
+        fi
+
+        "$INSTALL_DIR/venv/bin/python" -c "
+import sys
+config_file = sys.argv[1]
+token_id = sys.argv[2]
+token_hash = sys.argv[3]
+token_name = sys.argv[4]
+from datetime import datetime, timezone
+created = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+with open(config_file, 'r') as f:
+    content = f.read()
+
+content += '''
+[tokens.''' + token_id + ''']
+name = \"''' + token_name + '''\"
+token_hash = \"''' + token_hash + '''\"
+scopes = [\"*\"]
+read_only = true
+created_at = \"''' + created + '''\"
+'''
+
+with open(config_file, 'w') as f:
+    f.write(content)
+" "$config_file" "$token_id" "$token_hash" "$token_name"
+
+        ok "Token written to $config_file as [tokens.${token_id}]"
+    fi
+
+    echo
+    echo -e "  \e[1;32m╔══════════════════════════════════════════════════════════════════════════════╗\e[0m"
+    echo -e "  \e[1;32m║  MCP Token Generated                                                        ║\e[0m"
+    echo -e "  \e[1;32m╠══════════════════════════════════════════════════════════════════════════════╣\e[0m"
+    echo -e "  \e[1;32m║\e[0m                                                                            \e[1;32m║\e[0m"
+    echo -e "  \e[1;32m║\e[0m  Name:   $token_name"
+    echo -e "  \e[1;32m║\e[0m                                                                            \e[1;32m║\e[0m"
+    echo -e "  \e[1;32m║\e[0m  \e[1;33m▸ TOKEN (use in MCP client — copy this!):\e[0m                                 \e[1;32m║\e[0m"
+    echo -e "  \e[1;32m║\e[0m    \e[1;97m$raw_token\e[0m"
+    echo -e "  \e[1;32m║\e[0m                                                                            \e[1;32m║\e[0m"
+    echo -e "  \e[1;32m║\e[0m  \e[0;36m▸ HASH (saved to config.toml — do not share):\e[0m                             \e[1;32m║\e[0m"
+    echo -e "  \e[1;32m║\e[0m    \e[0;90m$token_hash\e[0m"
+    echo -e "  \e[1;32m║\e[0m                                                                            \e[1;32m║\e[0m"
+    echo -e "  \e[1;32m║\e[0m  \e[1;31m⚠  Save the TOKEN now — it will NOT be shown again!\e[0m                       \e[1;32m║\e[0m"
+    echo -e "  \e[1;32m║\e[0m                                                                            \e[1;32m║\e[0m"
+    echo -e "  \e[1;32m║\e[0m  MCP client config:                                                        \e[1;32m║\e[0m"
+    echo -e "  \e[1;32m║\e[0m    \"headers\": {\"Authorization\": \"Bearer \e[1;97m<TOKEN>\e[0m\"}                           \e[1;32m║\e[0m"
+    echo -e "  \e[1;32m╚══════════════════════════════════════════════════════════════════════════════╝\e[0m"
+    echo
+
+    if command -v systemctl &>/dev/null && systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+        warn "Restart the service to apply: sudo systemctl restart $SERVICE_NAME"
+    fi
+}
+
+do_set_admin_password() {
+    info "=== Zabbix MCP Server - Set Admin Password ==="
+    echo
+
+    if [[ ! -d "$INSTALL_DIR/venv" ]]; then
+        error "No installation found at $INSTALL_DIR"
+        exit 1
+    fi
+
+    local config_file="$CONFIG_DIR/config.toml"
+    if [[ ! -f "$config_file" ]]; then
+        error "Config file not found at $config_file"
+        exit 1
+    fi
+
+    local password
+    if [[ -t 0 ]]; then
+        read -rsp "Enter new admin password (min 10 chars, must include uppercase + digit): " password
+        echo
+        if [[ ${#password} -lt 10 ]]; then
+            error "Password must be at least 10 characters."
+            exit 1
+        fi
+        if ! [[ "$password" =~ [A-Z] ]]; then
+            error "Password must contain at least one uppercase letter."
+            exit 1
+        fi
+        if ! [[ "$password" =~ [0-9] ]]; then
+            error "Password must contain at least one digit."
+            exit 1
+        fi
+        local confirm
+        read -rsp "Confirm password: " confirm
+        echo
+        if [[ "$password" != "$confirm" ]]; then
+            error "Passwords do not match."
+            exit 1
+        fi
+    else
+        read -r password
+        if [[ ${#password} -lt 10 ]]; then
+            error "Password must be at least 10 characters."
+            exit 1
+        fi
+    fi
+
+    local password_hash
+    password_hash=$(_hash_password "$password")
+
+    # Update or create [admin.users.admin] in config using Python (safe for $-containing hashes)
+    "$INSTALL_DIR/venv/bin/python" -c "
+import sys, re
+config_file = sys.argv[1]
+password_hash = sys.argv[2]
+
+with open(config_file, 'r') as f:
+    content = f.read()
+
+if '[admin.users.admin]' in content:
+    # Replace existing password_hash line in [admin.users.admin] section
+    content = re.sub(
+        r'(\[admin\.users\.admin\][^\[]*?)password_hash\s*=\s*\"[^\"]*\"',
+        r'\1password_hash = \"' + password_hash + '\"',
+        content, count=1, flags=re.DOTALL)
+else:
+    if '[admin]' not in content:
+        content += '\n[admin]\nenabled = true\nport = 9090\nhost = \"127.0.0.1\"\n'
+    content += '\n[admin.users.admin]\npassword_hash = \"' + password_hash + '\"\nrole = \"admin\"\n'
+
+with open(config_file, 'w') as f:
+    f.write(content)
+" "$config_file" "$password_hash"
+
+    ok "Admin password updated successfully."
+    info "Restart the server to apply: sudo systemctl restart $SERVICE_NAME"
+}
+
+# --------------------------------------------------------------------------- #
 # Main — parse arguments
 # --------------------------------------------------------------------------- #
 COMMAND=""
+ORIGINAL_ARGS=("$@")
 for arg in "$@"; do
     case "$arg" in
         -h|--help)
@@ -926,7 +1302,13 @@ for arg in "$@"; do
         --install-python)
             AUTO_INSTALL_PYTHON=true
             ;;
-        install|update|upgrade|uninstall)
+        --with-reporting)
+            INSTALL_REPORTING=true
+            ;;
+        --without-reporting)
+            INSTALL_REPORTING=false
+            ;;
+        install|update|upgrade|uninstall|set-admin-password|generate-token)
             COMMAND="$arg"
             ;;
         *)
@@ -955,6 +1337,12 @@ case "$COMMAND" in
         ;;
     uninstall)
         do_uninstall
+        ;;
+    set-admin-password)
+        do_set_admin_password
+        ;;
+    generate-token)
+        do_generate_token "${ORIGINAL_ARGS[@]:1}"
         ;;
     install)
         do_install

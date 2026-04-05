@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}{% if edit_mode %}Edit User: {{ edit_username }}{% else %}Create User{% endif %}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{% if edit_mode %}Edit User: {{ edit_username }}{% else %}Create User{% endif %}</h1>
+        <p class="page-subtitle">{% if edit_mode %}Update user account settings{% else %}Add a new admin portal user account{% endif %}</p>
+    </div>
+    <a href="/users" class="btn btn-ghost">&larr; Back to Users</a>
+</div>
+
+<div class="card" style="max-width:480px;">
+    {% if error %}
+    <div class="alert alert-danger" style="padding:12px; margin-bottom:16px; border-radius:var(--radius-md); background:rgba(239,68,68,0.1); border:1px solid var(--color-danger); color:var(--color-danger);">
+        {{ error }}
+    </div>
+    {% endif %}
+    <form method="post" action="{% if edit_mode %}/users/{{ edit_username }}{% else %}/users/create{% endif %}" autocomplete="off">
+        <div class="form-group">
+            <label class="form-label" for="username">Username</label>
+            {% if edit_mode %}
+            <input type="text" id="username" name="username" class="form-input" value="{{ edit_username }}" readonly style="opacity:0.7;">
+            {% else %}
+            <input type="text" id="username" name="username" class="form-input" placeholder="Enter username" required autocomplete="off" value="{{ form_username or '' }}">
+            {% endif %}
+        </div>
+
+        {% if edit_mode and is_self %}
+        <div class="form-group">
+            <label class="form-label" for="current_password">Current Password</label>
+            <input type="password" id="current_password" name="current_password" class="form-input"
+                   placeholder="Required to change your password" autocomplete="current-password">
+            <div class="form-hint">Required when changing your own password.</div>
+        </div>
+        {% endif %}
+
+        <div class="form-group">
+            <label class="form-label" for="password">{% if edit_mode %}New Password{% else %}Password{% endif %}</label>
+            <input type="password" id="password" name="password" class="form-input"
+                   placeholder="{% if edit_mode %}Leave empty to keep current{% else %}Enter password{% endif %}"
+                   {% if not edit_mode %}required{% endif %} autocomplete="new-password" oninput="checkPasswordStrength(this.value)">
+            <div class="password-strength">
+                <div class="password-strength-bar" id="password-bar"></div>
+            </div>
+            <div class="form-hint" id="password-hint">{% if edit_mode %}Leave empty to keep current password. {% endif %}Minimum 8 characters.</div>
+        </div>
+
+        {% if edit_mode %}
+        <div class="form-group">
+            <label class="form-label" for="confirm_password">Confirm New Password</label>
+            <input type="password" id="confirm_password" name="confirm_password" class="form-input"
+                   placeholder="Repeat new password" autocomplete="new-password">
+        </div>
+        {% endif %}
+
+        <div class="form-group">
+            <label class="form-label" for="role">Role</label>
+            <select id="role" name="role" class="form-select" required>
+                <option value="viewer" {% if edit_role == 'viewer' or form_role == 'viewer' %}selected{% endif %}>Viewer — Read-only access</option>
+                <option value="operator" {% if edit_role == 'operator' or form_role == 'operator' %}selected{% endif %}>Operator — Manage tokens and templates</option>
+                <option value="admin" {% if edit_role == 'admin' or form_role == 'admin' or not edit_mode %}selected{% endif %}>Admin — Full access</option>
+            </select>
+            <div class="form-hint">Determines what actions the user can perform in the admin portal.</div>
+        </div>
+
+        <div style="margin-top:24px; display:flex; gap:8px;">
+            <button type="submit" class="btn btn-primary">{% if edit_mode %}Save Changes{% else %}Create User{% endif %}</button>
+            <a href="/users" class="btn btn-ghost">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function checkPasswordStrength(password) {
+    var bar = document.getElementById('password-bar');
+    var hint = document.getElementById('password-hint');
+    var score = 0;
+
+    if (password.length >= 8) score++;
+    if (password.length >= 12) score++;
+    if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score++;
+    if (/\d/.test(password)) score++;
+    if (/[^a-zA-Z0-9]/.test(password)) score++;
+
+    bar.className = 'password-strength-bar';
+    if (password.length === 0) {
+        bar.style.width = '0';
+        hint.textContent = 'Minimum 8 characters.';
+    } else if (score <= 2) {
+        bar.classList.add('strength-weak');
+        hint.textContent = 'Weak password';
+        hint.style.color = 'var(--color-danger)';
+    } else if (score <= 3) {
+        bar.classList.add('strength-medium');
+        hint.textContent = 'Medium strength';
+        hint.style.color = 'var(--color-warning)';
+    } else {
+        bar.classList.add('strength-strong');
+        hint.textContent = 'Strong password';
+        hint.style.color = 'var(--color-success)';
+    }
+}
+</script>
+{% endblock %}
