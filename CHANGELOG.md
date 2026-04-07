@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.17 — unreleased
+
+### Fixed
+
+- **Installer config copy now happens before pip install** ([#12](https://github.com/initMAX/zabbix-mcp-server/discussions/12)) — `cp config.example.toml /etc/zabbix-mcp/config.toml` was previously called after `install_package`, so any pip failure (network error, missing wheel, user interrupt) left the user with empty `/etc/zabbix-mcp/{assets,tls}` and no config to edit. The copy is now performed before the pip install so the file is always in place even when pip fails.
+- **Installer spinner no longer hides errors** ([#12](https://github.com/initMAX/zabbix-mcp-server/discussions/12)) — under `set -euo pipefail`, a failing background command made `wait "$pid"` abort the script before the spinner cleanup, error message, and captured output could be printed; the user saw a spinner mid-frame followed by their bash prompt with zero diagnostics. Spinner now uses `wait "$pid" || exit_code=$?` so set -e is suppressed, the real exit code is captured, the spinner line is cleared, and the failing command's stdout/stderr is dumped between `--- command output ---` markers.
+
 ## v1.16 — 2026-04-05
 
 ### Added
