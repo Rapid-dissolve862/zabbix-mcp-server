@@ -121,9 +121,14 @@ spin() {
         sleep 0.1
     done
 
-    # Get exit code
-    wait "$pid"
-    local exit_code=$?
+    # Get exit code - the `|| exit_code=$?` pattern is required for two reasons:
+    #   1. `set -e` does not abort on commands followed by `||`, so the spinner
+    #      cleanup and error reporting below always run even if the bg job failed.
+    #   2. `wait`'s real exit code is captured directly. (Do NOT use
+    #      `if ! wait; then exit_code=$?; fi` - that captures $? of the if, which
+    #      is always 0 when the negation succeeds.)
+    local exit_code=0
+    wait "$pid" || exit_code=$?
 
     # Clear spinner line
     printf "\r\e[K"
@@ -131,9 +136,13 @@ spin() {
     if [[ $exit_code -eq 0 ]]; then
         ok "$msg"
     else
-        error "$msg — failed!"
-        # Show output on failure
-        cat "$tmpfile" >&2
+        error "$msg - failed (exit $exit_code)"
+        # Show captured output on failure so the user can see what went wrong
+        if [[ -s "$tmpfile" ]]; then
+            echo "--- command output ---" >&2
+            cat "$tmpfile" >&2
+            echo "--- end output ---" >&2
+        fi
     fi
 
     rm -f "$tmpfile"
@@ -776,22 +785,27 @@ do_install() {
     touch "$LOG_DIR/server.log"
     chown "$SERVICE_USER:$SERVICE_USER" "$LOG_DIR/server.log"
 
-    # Package
-    install_package
-
-    # Config
+    # Config - copy BEFORE install_package so a slow/failing pip install
+    # does not leave the user without /etc/zabbix-mcp/config.toml.
     if [[ ! -f "$CONFIG_DIR/config.toml" ]]; then
+        if [[ ! -f "$SCRIPT_DIR/config.example.toml" ]]; then
+            error "Cannot find config.example.toml in $SCRIPT_DIR"
+            exit 1
+        fi
         info "Copying example config to $CONFIG_DIR/config.toml..."
         cp "$SCRIPT_DIR/config.example.toml" "$CONFIG_DIR/config.toml"
         # Set transport to http for systemd deployment
         if ! sed -i 's/^transport = "stdio"/transport = "http"/' "$CONFIG_DIR/config.toml"; then
-            warn "Failed to set transport to http — edit $CONFIG_DIR/config.toml manually."
+            warn "Failed to set transport to http - edit $CONFIG_DIR/config.toml manually."
         fi
         chmod 600 "$CONFIG_DIR/config.toml"
         chown "$SERVICE_USER:$SERVICE_USER" "$CONFIG_DIR/config.toml"
     else
         warn "Config already exists at $CONFIG_DIR/config.toml - not overwriting."
     fi
+
+    # Package
+    install_package
 
     # systemd + logrotate + sudoers
     install_systemd_unit
