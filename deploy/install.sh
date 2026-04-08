@@ -1233,16 +1233,26 @@ import sys
 config_path = sys.argv[1]
 
 # Step 1: TOML syntax check
+# Try in order: stdlib tomllib (Python 3.11+) -> tomli (3.10 backport) ->
+# tomlkit (always installed as a runtime dependency for config writes).
+# tomlkit is the guaranteed fallback so the validator works regardless of
+# Python version or whether the optional 'tomli' marker dependency was
+# pulled in by pip during upgrades from older versions.
+raw = None
 try:
-    if sys.version_info >= (3, 11):
+    try:
         import tomllib
-    else:
+        with open(config_path, 'rb') as f:
+            raw = tomllib.load(f)
+    except ModuleNotFoundError:
         try:
-            import tomllib
+            import tomli
+            with open(config_path, 'rb') as f:
+                raw = tomli.load(f)
         except ModuleNotFoundError:
-            import tomli as tomllib
-    with open(config_path, 'rb') as f:
-        raw = tomllib.load(f)
+            import tomlkit
+            with open(config_path, 'r', encoding='utf-8') as f:
+                raw = tomlkit.parse(f.read())
 except Exception as e:
     print(f'TOML syntax error: {e}')
     sys.exit(1)
