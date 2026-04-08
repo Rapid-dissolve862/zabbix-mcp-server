@@ -651,7 +651,99 @@ EOF
 # --------------------------------------------------------------------------- #
 # Install Python package from local git clone
 # --------------------------------------------------------------------------- #
+check_venv_health() {
+    # Verify the existing venv is internally consistent. Returns 0 if healthy,
+    # 1 if it needs to be recreated.
+    #
+    # The most common corruption pattern: an older installer (or a manual
+    # 'python3.X -m venv --upgrade' call) added new Python binaries to an
+    # existing venv without updating the default python / python3 symlinks,
+    # so bin/python and bin/pip end up running different Python versions.
+    # pip then installs packages into one site-packages directory while
+    # bin/python reads from another. The service may still start (because
+    # the systemd ExecStart uses bin/zabbix-mcp-server which has its own
+    # shebang to a specific python), but every helper script that uses
+    # bin/python directly fails with "ModuleNotFoundError" on packages that
+    # ARE installed - including the validate_config step.
+    #
+    # This silently rots installations across system Python upgrades and
+    # is the root cause of the "No module named 'tomlkit'" failure that
+    # would otherwise be impossible (tomlkit is an unconditional runtime
+    # dependency).
+    local venv="$INSTALL_DIR/venv"
+    [[ -d "$venv" ]] || return 0  # No venv at all - install_package creates one fresh
+
+    local py="$venv/bin/python"
+    local pip_bin="$venv/bin/pip"
+
+    # 1. The default python symlink must exist and run
+    if [[ ! -e "$py" ]]; then
+        warn "Venv health: $py is missing"
+        return 1
+    fi
+    local py_ver
+    if ! py_ver=$("$py" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null); then
+        warn "Venv health: $py exists but cannot run (likely a dangling symlink)"
+        return 1
+    fi
+
+    # 2. The default pip must exist, run, and report the SAME Python version
+    if [[ ! -e "$pip_bin" ]]; then
+        warn "Venv health: $pip_bin is missing"
+        return 1
+    fi
+    local pip_ver_line pip_py_ver
+    if ! pip_ver_line=$("$pip_bin" --version 2>/dev/null); then
+        warn "Venv health: $pip_bin cannot run"
+        return 1
+    fi
+    # Parse "pip X.Y.Z from /path/.../pythonM.N/site-packages/pip (python M.N)"
+    pip_py_ver=$(echo "$pip_ver_line" | sed -n 's/.*(python \([0-9][0-9]*\.[0-9][0-9]*\)).*/\1/p')
+    if [[ -z "$pip_py_ver" ]]; then
+        warn "Venv health: cannot parse Python version from pip output: $pip_ver_line"
+        return 1
+    fi
+
+    if [[ "$py_ver" != "$pip_py_ver" ]]; then
+        error "Venv corrupted: bin/python is Python $py_ver but bin/pip is Python $pip_py_ver"
+        error "This happens when system Python is upgraded under a running venv,"
+        error "or an installer ran 'python3.X -m venv --upgrade' incorrectly."
+        return 1
+    fi
+
+    return 0
+}
+
 install_package() {
+    # Detect and recover from a corrupted venv (e.g. mixed Python versions
+    # left over from a system Python upgrade). The check is a no-op for
+    # fresh installs (venv doesn't exist yet) and for healthy venvs.
+    if [[ -d "$INSTALL_DIR/venv" ]]; then
+        if ! check_venv_health; then
+            warn "Recreating venv at $INSTALL_DIR/venv from scratch"
+            # Capture a diagnostic of the broken state before destroying it
+            local diag="/tmp/zabbix-mcp-broken-venv-$(date +%Y%m%d_%H%M%S).txt"
+            {
+                echo "# Captured by zabbix-mcp installer when recreating broken venv"
+                echo "# Date: $(date)"
+                echo "# Reason: check_venv_health failed (see installer log above)"
+                echo
+                echo "## ls -la $INSTALL_DIR/venv/bin/"
+                ls -la "$INSTALL_DIR/venv/bin/" 2>&1 || true
+                echo
+                echo "## bin/python --version"
+                "$INSTALL_DIR/venv/bin/python" --version 2>&1 || true
+                echo "## bin/pip --version"
+                "$INSTALL_DIR/venv/bin/pip" --version 2>&1 || true
+                echo
+                echo "## bin/pip list"
+                "$INSTALL_DIR/venv/bin/pip" list 2>&1 || true
+            } > "$diag" 2>/dev/null || true
+            ok "Diagnostic saved to $diag"
+            rm -rf "$INSTALL_DIR/venv"
+        fi
+    fi
+
     if [[ ! -d "$INSTALL_DIR/venv" ]]; then
         spin "Creating virtual environment" "$PYTHON_BIN" -m venv "$INSTALL_DIR/venv"
     fi
@@ -1232,12 +1324,31 @@ validate_config() {
 import sys
 config_path = sys.argv[1]
 
-# Step 1: TOML syntax check
-# Try in order: stdlib tomllib (Python 3.11+) -> tomli (3.10 backport) ->
-# tomlkit (always installed as a runtime dependency for config writes).
-# tomlkit is the guaranteed fallback so the validator works regardless of
-# Python version or whether the optional 'tomli' marker dependency was
-# pulled in by pip during upgrades from older versions.
+# Step 1: Full validation via the same loader the server uses.
+# load_config does its own TOML parsing (tomllib on 3.11+, tomli on 3.10),
+# so this single call covers both syntax AND semantic validation. If the
+# venv is broken (e.g. ImportError on tomli/tomllib because system Python
+# was upgraded under the venv), the message tells the user exactly what
+# is missing - and check_venv_health in install_package should have
+# already fixed that case before we got here.
+try:
+    from zabbix_mcp.config import load_config
+    load_config(config_path)
+except ImportError as e:
+    print(f'venv broken: {e} - rerun the installer to recreate the venv')
+    sys.exit(1)
+except Exception as e:
+    msg = str(e)
+    err_type = type(e).__name__
+    if 'TOML' in err_type or 'Toml' in err_type or 'toml' in msg.lower():
+        print(f'TOML syntax error: {msg}')
+    else:
+        print(msg)
+    sys.exit(1)
+
+# Step 2: Re-parse the raw TOML for admin section sanity warnings.
+# This is best-effort: if no parser is available we skip the warnings,
+# because load_config already proved the config is valid.
 raw = None
 try:
     try:
@@ -1253,28 +1364,19 @@ try:
             import tomlkit
             with open(config_path, 'r', encoding='utf-8') as f:
                 raw = tomlkit.parse(f.read())
-except Exception as e:
-    print(f'TOML syntax error: {e}')
-    sys.exit(1)
+except Exception:
+    pass  # Skip warnings; primary validation already passed
 
-# Step 2: Semantic validation via load_config
-try:
-    from zabbix_mcp.config import load_config
-    load_config(config_path)
-except Exception as e:
-    print(f'{e}')
-    sys.exit(1)
-
-# Step 3: Check admin section if present
-admin = raw.get('admin', {})
-if admin.get('enabled'):
-    users = admin.get('users', {})
-    if not users:
-        print('Warning: [admin] is enabled but no admin users configured — portal will be inaccessible')
-        sys.exit(0)
-    for username, user in users.items():
-        if 'password_hash' not in user:
-            print(f'Warning: admin user \"{username}\" has no password_hash')
+if raw is not None:
+    admin = raw.get('admin', {})
+    if admin.get('enabled'):
+        users = admin.get('users', {})
+        if not users:
+            print('Warning: [admin] is enabled but no admin users configured - portal will be inaccessible')
+            sys.exit(0)
+        for username, user in users.items():
+            if 'password_hash' not in user:
+                print(f'Warning: admin user \"{username}\" has no password_hash')
 
 print('OK')
 " "$config_file" 2>&1)
