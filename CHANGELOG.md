@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.18 - unreleased
+
+### Fixed
+
+- **Custom report templates now persist across container restarts** ([#13](https://github.com/initMAX/zabbix-mcp-server/issues/13)) - v1.17 moved custom templates from `/var/log/zabbix-mcp/templates/` to `/etc/zabbix-mcp/templates/`, but the container setup never caught up with the new path. `Dockerfile` did not create `/etc/zabbix-mcp/templates/` with the correct ownership, `docker-compose.yml` did not mount it as a persistent volume, and the legacy-to-current migration only ran in `deploy/install.sh` (which containers do not use). A custom template created via the admin portal inside a container would be written to a non-persistent path and lost on the next restart, and v1.16 -> v1.17 container upgrades stranded existing templates in the old `logs` volume. `Dockerfile` now creates `/etc/zabbix-mcp/templates/` with `zabbix-mcp:zabbix-mcp` ownership and mode `0750`, `docker-compose.yml` mounts it as a named volume (`templates`), and a new `zabbix_mcp.template_migration` module runs the equivalent of the bash migration at server startup: moves `*.html` files from the legacy location to the current one (preserving content and timestamps, skipping any file that already exists at the destination), rewrites `template_file` paths in `[report_templates.*]` config sections via tomlkit (preserves comments and formatting), and removes the legacy directory if it ends up empty. The migration is idempotent, non-fatal (any failure is logged as a warning, startup continues), and a no-op on fresh installs or when nothing needs to be moved. The reporting feature remains in beta.
+
 ## v1.17 — 2026-04-08
 
 ### Added

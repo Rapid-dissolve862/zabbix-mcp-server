@@ -1646,6 +1646,13 @@ def run_server(
     # Store runtime port for admin portal MCP health check
     object.__setattr__(config, '_runtime_port', port)
 
+    # Migrate custom report templates from the legacy v1.16 location to the
+    # current v1.17+ location. For host installs deploy/install.sh handles
+    # this, but container deployments do not use the installer so we run it
+    # here. No-op if there is nothing to migrate.
+    from zabbix_mcp.template_migration import migrate_custom_templates
+    migrate_custom_templates(getattr(config, "_config_path", None))
+
     client_manager = ClientManager(config)
 
     # Determine URL scheme based on TLS configuration
