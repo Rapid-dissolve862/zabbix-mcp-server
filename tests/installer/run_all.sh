@@ -65,11 +65,15 @@ for entry in "${IMAGES[@]}"; do
         "$REPO_ROOT" 2>&1 | tail -5; then
         echo -e "  ${GREEN}PASS${RESET}: $description"
         RESULTS+=("PASS: $description")
-        ((PASS++))
+        # Use PASS=$((PASS+1)) rather than ((PASS++)): the post-increment
+        # form returns the pre-increment value as the command's exit code,
+        # which is 0 (arithmetic false) on the very first increment and
+        # trips `set -e`, aborting the loop after the first distro.
+        PASS=$((PASS + 1))
     else
         echo -e "  ${RED}FAIL${RESET}: $description"
         RESULTS+=("FAIL: $description")
-        ((FAIL++))
+        FAIL=$((FAIL + 1))
     fi
     echo
 done
