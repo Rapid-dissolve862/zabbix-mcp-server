@@ -56,6 +56,11 @@ def main() -> None:
         help="Override HTTP port from config",
     )
     parser.add_argument(
+        "--check-config",
+        action="store_true",
+        help="Validate config.toml and exit without starting the server",
+    )
+    parser.add_argument(
         "--version",
         action="version",
         version=f"%(prog)s {__version__}",
@@ -67,6 +72,9 @@ def main() -> None:
         config = load_config(args.config)
         # Store config path for admin portal and config writer
         object.__setattr__(config, "_config_path", str(Path(args.config).resolve()))
+    except FileNotFoundError:
+        print(f"ERROR: Config file not found: {args.config}", file=sys.stderr)
+        sys.exit(1)
     except PermissionError:
         print(
             f"ERROR: Cannot read {args.config} (permission denied). "
@@ -77,6 +85,11 @@ def main() -> None:
     except ConfigError as e:
         print(f"Configuration error: {e}", file=sys.stderr)
         sys.exit(1)
+
+    # --check-config: validate only, do not start the server.
+    if args.check_config:
+        print(f"OK: {args.config} is valid")
+        sys.exit(0)
 
     log_level = getattr(logging, config.server.log_level.upper(), logging.INFO)
     log_format = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"

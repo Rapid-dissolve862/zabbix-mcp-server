@@ -1653,6 +1653,12 @@ def run_server(
     from zabbix_mcp.template_migration import migrate_custom_templates
     migrate_custom_templates(getattr(config, "_config_path", None))
 
+    # Bootstrap a first-run admin user if the admin portal is enabled but no
+    # users exist yet. Host installs get this from install.sh setup_admin;
+    # container deployments need it done here. No-op on subsequent restarts.
+    from zabbix_mcp.admin_bootstrap import bootstrap_admin_if_needed
+    bootstrap_admin_if_needed(getattr(config, "_config_path", None))
+
     client_manager = ClientManager(config)
 
     # Determine URL scheme based on TLS configuration
