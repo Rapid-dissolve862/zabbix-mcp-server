@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.20 - unreleased
+
+### Changed
+
+- **README restructuring proposal** ([#17](https://github.com/initMAX/zabbix-mcp-server/issues/17)) - a proposed rework of the README opening lives in `README2.md` for review before replacing `README.md`. The first screen now leads with the operator outcome rather than company branding: a hero preview image, the product title, an enriched tagline (web admin portal, multi-server support, scoped bearer auth, audit log, PDF reporting), and a compact centered table of contents grouped by user journey (Overview / Install / Configure / Use / More). The full initMAX branding block (banner, slogan, Zabbix Premium Partner + Certified Trainer badges, social and contact links, AGPL badge) moved to a dedicated `## About initMAX` section at the bottom of the document with a short international-presence paragraph (US, CZ, SK). No section content changed - this is a hierarchy-only rework. Once reviewed, `README2.md` will replace `README.md` and be deleted.
+- **New framed initMAX logo variant** (`.readme/logo/initmax-logo-framed.svg`) - the existing horizontal logo comes in two variants (dark-text for light backgrounds, white-text for dark backgrounds) behind a `<picture>` + `prefers-color-scheme` media query. GitHub honors this, but VS Code's markdown preview and some other renderers do not, which left the logo unreadable in dark-theme previews. The new framed variant bakes a dark navy (`#0d142d`) background with rounded corners into the SVG itself, so the logo renders identically on any page (light or dark, GitHub or local preview). Used inline in the proposed README2.md "developed and maintained by" line.
+
+### Fixed
+
+- **AGPL copyright headers added to all source files** - 6 test/shell files (`tests/integration/*.py`, `tests/mcp_test_helper.py`, `tests/installer/run_all.sh`) and 16 admin portal Jinja2 templates (`src/zabbix_mcp/admin/templates/**/*.html`) were missing the standard AGPL-3.0 copyright notice. Added the canonical Python/shell comment block (matching the rest of the project) to shell and Python files, and a shorter Jinja2 `{# ... #}` block pointing at `LICENSE` for HTML templates. Verified via `ast.parse` that module docstrings still resolve correctly (Python skips comments when locating the first statement), via `jinja2.Environment.get_template` that all 16 templates still parse, and via live container smoke test that every admin portal page still renders (HTTP 200 / 303 redirects preserved).
+
 ## v1.19 - 2026-04-14
 
 ### Added
