@@ -29,6 +29,7 @@ editor emit templates that actually render.
 ### Fixed
 
 - **`ReportEngine` mutated shared module-level template registry** - `load_custom_templates()` used to write into `_REPORT_TEMPLATES` (the module-level dict), so adding a custom template in one engine instance leaked into every other instance and made custom templates show up under "Built-in" in the dashboard. Now scoped to `self._templates = dict(_REPORT_TEMPLATES)` per engine instance.
+- **Tool Exposure UI missing the `extensions` group** - the Settings page had `TOOL_DATA` hardcoded with only the five Zabbix-API groups (monitoring / data_collection / alerts / users / administration), so the initMAX extension tools (`graph_render`, `anomaly_detect`, `capacity_forecast`, `report_generate`, `action_prepare`, `action_confirm`, `zabbix_raw_api_call`, `health_check`) were invisible to the bubble editor. Operators who wanted to disable reporting but keep monitoring had no way to do it from the portal. Added the `extensions` group to the UI; the tool allowlist hint and `config.example.toml` comments now list it too. Also corrected the stale `config.example.toml` claim that `health_check` / `zabbix_raw_api_call` were "always registered" - they have been in the extensions group and gated by `_ext_allowed()` since v1.16.
 
 ## v1.23b1 - 2026-04-16 (reporting beta1)
 

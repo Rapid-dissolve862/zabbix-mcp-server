@@ -204,11 +204,17 @@ compact_output = true
 # This is useful when your LLM has a tool limit (e.g. OpenAI max 128 tools).
 #
 # Use category names to include entire groups at once, individual tool prefixes,
-# or mix both. The "health_check" and "zabbix_raw_api_call" tools are always
-# registered regardless of this setting.
+# or mix both. Tools outside any group (none currently) are registered regardless.
 #
 # Default (all tools):
-# tools = ["monitoring", "data_collection", "alerts", "users", "administration"]
+# tools = ["monitoring", "data_collection", "alerts", "users", "administration", "extensions"]
+#
+# The "extensions" group contains initMAX value-add tools that sit on top of
+# the raw Zabbix API: graph_render, anomaly_detect, capacity_forecast,
+# report_generate (PDF reports), action_prepare / action_confirm (two-step
+# write approval), health_check, and zabbix_raw_api_call. Omit it from
+# `tools` or put it in `disabled_tools` to lock the MCP server down to
+# plain Zabbix API calls only.
 #
 # Categories and their tools:
 #
