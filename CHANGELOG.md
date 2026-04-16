@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.21 - unreleased
+## v1.21 - 2026-04-16
 
 ### Security
 
@@ -14,6 +14,10 @@
 - **Rate-limit key hardened** - the admin portal's 30 POST/min rate limiter was keyed by the first 20 characters of the `admin_session` cookie, so rotating a single cookie character produced a fresh bucket. Now keyed by client IP (honoring `X-Forwarded-For` only when the direct peer is in `[server].trusted_proxies`).
 - **Login rate-limit rolling window** - the previous implementation cleared the attempt list every 30 seconds, so a paced attack (1 failure every 31 s) could brute force indefinitely without hitting the `MAX_ATTEMPTS` ceiling. The limiter now keeps every failed attempt inside the 5-minute window; once 5 failures accumulate, further attempts are blocked until the oldest falls out.
 - **scrypt N uplift to 131072** - password hashing now uses OWASP 2024 recommended parameters (N=131072, r=8, p=1) for new passwords. Existing admin user hashes with the v1.20 N=16384 still verify transparently because the N value is stored in the hash - no forced password reset on upgrade.
+
+### Changed
+
+- **`README2.md` promoted to `README.md`** ([#17](https://github.com/initMAX/zabbix-mcp-server/issues/17)) - the proposed rework of the README opening from v1.20 is now the canonical README. Per @nathan-widjaja's feedback on issue #17, the tagline was trimmed to a single outcome-led line ("Full Zabbix API access from Claude, Codex, VS Code, JetBrains, and other MCP clients.") and the Table of Contents lost its emoji so the eye lands on the pitch first, not on the structure. Supporting details (admin portal, multi-server support, scoped bearer auth, audit log, PDF reporting) moved into the Features bullets where they belong as evidence instead of laundry list. `README2.md` deleted.
 
 ### Added
 
